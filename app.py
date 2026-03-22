@@ -5,20 +5,34 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 
-# --- 1. 后端类：模型权限与日志对齐 ---
+# --- 1. 后端类：注入 17 个指定模型 ID ---
 class JewelryAIEngine:
     def __init__(self, api_key):
         self.api_key = api_key
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "Jewelry_Visual_V43"
+            "X-Title": "Jewelry_Visual_V44"
         }
-        # 严格对应你成功日志中的 2026 官方 ID
+        # 严格按照你提供的列表更新绘图模型
         self.MODELS = {
+            "OpenRouter Auto (自动选择)": "openrouter/auto",
+            "Google Gemini 2.5 Flash Image": "google/gemini-2.5-flash-image",
+            "Google Gemini 2.5 Flash Image Preview": "google/gemini-2.5-flash-image-preview",
+            "Google Gemini 3.1 Flash Image Preview": "google/gemini-3.1-flash-image-preview",
+            "Google Gemini 3 Pro Image Preview": "google/gemini-3-pro-image-preview",
+            "ByteDance Seedream 4.5": "bytedance-seed/seedream-4.5",
             "OpenAI GPT-5 Image Mini": "openai/gpt-5-image-mini",
-            "Google Nano Banana 2": "google/gemini-3.1-flash-image",
-            "ByteDance Seedream 4.5": "bytedance/seedream-4.5"
+            "OpenAI GPT-5 Image": "openai/gpt-5-image",
+            "Sourceful Riverflow v2 Fast": "sourceful/riverflow-v2-fast",
+            "Sourceful Riverflow v2 Fast Preview": "sourceful/riverflow-v2-fast-preview",
+            "Sourceful Riverflow v2 Standard Preview": "sourceful/riverflow-v2-standard-preview",
+            "Sourceful Riverflow v2 Pro": "sourceful/riverflow-v2-pro",
+            "Sourceful Riverflow v2 Max Preview": "sourceful/riverflow-v2-max-preview",
+            "FLUX.2 Klein 4B": "black-forest-labs/flux.2-klein-4b",
+            "FLUX.2 Max": "black-forest-labs/flux.2-max",
+            "FLUX.2 Flex": "black-forest-labs/flux.2-flex",
+            "FLUX.2 Pro": "black-forest-labs/flux.2-pro"
         }
 
     def log(self, level, msg):
@@ -32,7 +46,7 @@ class JewelryAIEngine:
                 d = res.json().get('data', {})
                 return f"{round(d.get('limit', 0) - d.get('usage', 0), 4)} USD"
             return "Error"
-        except: return "Network Latency"
+        except: return "Net Error"
 
     def run_gen(self, mid_key, prompt):
         mid = self.MODELS.get(mid_key)
@@ -42,11 +56,12 @@ class JewelryAIEngine:
             "modalities": ["image"]
         }
         try:
+            self.log("INFO", f"正在执行: {mid}")
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json=payload, timeout=60)
             if res.status_code == 200:
                 img = res.json()['choices'][0]['message'].get('images', [None])[0]
                 return img, mid
-            self.log("ERROR", f"{mid} (Code {res.status_code}): {res.text[:100]}")
+            self.log("ERROR", f"API 异常 ({res.status_code}): {res.text[:100]}")
             return None, f"API 状态错误 ({res.status_code})"
         except Exception as e:
             return None, str(e)
@@ -60,30 +75,28 @@ class JewelryAIEngine:
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, 
                                 json={"model": model_id, "messages": [{"role": "user", "content": content}]}, timeout=60)
             return res.json()['choices'][0]['message']['content']
-        except: return "❌ SEO 优化任务执行失败"
+        except: return "❌ SEO 任务执行失败"
 
-# --- 2. UI 页面布局：找回所有丢失的输入项 ---
-st.set_page_config(page_title="饰品全能 AI 监控版", layout="wide")
+# --- 2. 保持 UI 逻辑与输入项不动 ---
+st.set_page_config(page_title="TikTok Shop 饰品 AI 专家", layout="wide")
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngine(api_key)
 
-# 初始化状态
 if "seo_box" not in st.session_state: st.session_state.seo_box = ""
 if "gallery" not in st.session_state: st.session_state.gallery = []
 
-# --- 侧边栏：控制台 ---
+# --- 侧边栏：完整找回输入项 ---
 with st.sidebar:
     st.title("🛡️ 控制台")
-    # 余额显示
     col_bal, col_ref = st.columns([2, 1])
-    with col_bal: st.metric("API 余额 (USD)", st.session_state.get("bal_val", "未刷新"))
+    with col_bal: st.metric("API 余额 (USD)", st.session_state.get("bal_val", "待刷新"))
     with col_ref: 
-        if st.button("🔄 刷新"): st.session_state.bal_val = engine.get_balance()
+        if st.button("刷新"): st.session_state.bal_val = engine.get_balance()
 
     st.divider()
     st.subheader("⚙️ 模型配置")
     m_txt = st.selectbox("文案模型", ["google/gemini-2.0-flash-001", "deepseek/deepseek-chat"])
-    m_img = st.selectbox("绘图模型", list(engine.MODELS.keys()))
+    m_img = st.selectbox("绘图模型", list(engine.MODELS.keys()), index=0) # 默认 Auto
 
     st.divider()
     st.subheader("📋 任务参数")
@@ -94,33 +107,29 @@ with st.sidebar:
     
     st.divider()
     u_file = st.file_uploader("📸 上传商品原图", type=["jpg", "png", "jpeg"])
-    if u_file: st.image(Image.open(u_file), caption="待处理原图")
 
-# --- 主界面：执行与成果 ---
+# --- 主界面 ---
 st.header("💎 TikTok Shop 饰品全能 AI 专家 (监控版)")
-
 tab_exec, tab_log = st.tabs(["🚀 任务执行", "📜 服务日志"])
 
 with tab_exec:
     c_btn, c_res = st.columns([1, 1.5])
-    
     with c_btn:
         st.subheader("✨ 专家指令")
-        # 找回你截图中的按钮名称
         if st.button("✨ 执行：标题 SEO 优化", use_container_width=True):
-            prompt = f"针对{u_market}市场，优化{u_gender}款{u_cat}标题。原标题：{u_title}。请给出爆款词建议。"
+            prompt = f"针对{u_market}市场，优化{u_gender}款{u_cat}标题。原标题：{u_title}。请分析图片并给出建议。"
             st.session_state.seo_box = engine.run_seo(m_txt, prompt, u_file)
             
         if st.button("🖼️ 执行：商品图优化", use_container_width=True):
-            prompt = f"Jewelry photography of {u_cat}, Morandi cream background, high-end, 8k"
+            prompt = f"Jewelry photography of {u_cat}, Morandi cream background, elegant, 8k"
             res, mid = engine.run_gen(m_img, prompt)
-            if res: st.session_state.gallery.append({"u": res, "m": mid, "t": "莫兰迪主图"})
+            if res: st.session_state.gallery.append({"u": res, "m": mid, "t": "商品优化图"})
             else: st.error(mid)
 
         if st.button("👤 执行：模特图优化", use_container_width=True):
-            prompt = f"Fashion model wearing {u_cat}, TikTok style lifestyle, {u_market} aesthetics, 8k"
+            prompt = f"Professional model wearing {u_cat}, {u_market} style lifestyle photography, 8k"
             res, mid = engine.run_gen(m_img, prompt)
-            if res: st.session_state.gallery.append({"u": res, "m": mid, "t": "模特实拍"})
+            if res: st.session_state.gallery.append({"u": res, "m": mid, "t": "模特佩戴图"})
             else: st.error(mid)
 
     with c_res:
@@ -138,6 +147,6 @@ with tab_exec:
                     st.image(Image.open(BytesIO(base64.b64decode(b64))), caption=f"{item['t']} ({item['m']})")
 
 with tab_log:
-    st.subheader("🛠️ 系统实时运行状态")
+    st.subheader("🛠️ 实时服务日志")
     log_text = "\n".join(st.session_state.get("logs", [])[::-1])
-    st.text_area("Log Output", log_text, height=400)
+    st.text_area("Log Output", log_text, height=450)
