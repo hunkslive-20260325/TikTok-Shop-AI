@@ -9,7 +9,7 @@ import time
 # ==========================================
 # 🛡️ 全局静态模型库（硬编码，严禁精简）
 # ==========================================
-# 包含所有绘图模型 (17个) 和 文案/标题模型 (14个)
+# 包含 17 个绘图模型和 14 个文案/标题模型
 ALL_DRAWING_MODELS = {
     "openrouter/auto": "openrouter/auto",
     "google/gemini-2.5-flash-image": "google/gemini-2.5-flash-image",
@@ -47,53 +47,57 @@ ALL_TEXT_MODELS = [
     "openrouter/auto"
 ]
 
-# --- 1. 后端类：逻辑加固 ---
+# --- 1. 后端引擎类 ---
 class JewelryAIEngineV47:
     def __init__(self, api_key):
         self.api_key = api_key
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "Jewelry_Visual_Expert_V47"
+            "X-Title": "TikTok_Jewelry_V47_Stable"
         }
 
     def run_smart_gen(self, mid_key, p_type, cat, market, gen, file, status_box):
         mid = ALL_DRAWING_MODELS.get(mid_key)
-        prog = status_box.progress(0, "🔍 正在进行多模态识图分析...")
+        prog = status_box.progress(0, "🔍 第一步：深度识图分析中...")
         
-        # 1. 识图锁定
+        # 识图锁定逻辑
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
         v_payload = {
             "model": "google/gemini-3.1-flash-image-preview",
             "messages": [{"role": "user", "content": [
-                {"type": "text", "text": "请提取此饰品的几何形状、材质细节。"},
+                {"type": "text", "text": "提取此饰品的形状、材质与核心设计语言，用于生成一致的展示图。"},
                 {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_in}"}}
             ]}]
         }
         try:
             v_res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json=v_payload, timeout=60)
             v_desc = v_res.json()['choices'][0]['message']['content']
-        except: v_desc = f"Commercial {cat} jewelry"
+            prog.progress(40, "🎯 第二步：构思商业级渲染指令...")
+        except:
+            v_desc = f"Specific {cat} jewelry from reference"
 
-        # 2. 注入摄影规范 (莫兰迪/水光肌/小麦色)
-        prog.progress(40, "🎯 正在生成商业级 Prompt...")
         prompt = self.get_expert_prompt(p_type, cat, market, gen, v_desc)
+        prog.progress(70, f"🎨 第三步：正在通过 {mid_key} 渲染图片...")
         
-        # 3. 渲染
-        prog.progress(70, f"🎨 正在调用 {mid_key}...")
         try:
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, 
                                 json={"model": mid, "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}], "modalities": ["image"]}, timeout=120)
-            img_data = res.json()['choices'][0]['message'].get('images', [None])[0]
-            prog.progress(100, "✅ 渲染完成！")
+            data = res.json()
+            # 安全提取 images 列表
+            choices = data.get('choices', [{}])
+            img_list = choices[0].get('message', {}).get('images', [])
+            img_data = img_list[0] if img_list else None
+            prog.progress(100, "✅ 任务处理完成")
             return img_data
-        except: return None
+        except:
+            return None
 
     def get_expert_prompt(self, p_type, cat, market, gen, v_desc):
         if p_type == "product":
-            return f"Commercial jewelry photography. {v_desc}. Morandi warm tones, cream silk fabric, geometric podiums, soft light, 8k."
-        style = "Male, tanned skin, black knitwear" if gen == "男性" else "Female, dewy skin, white outfit, soft pink background"
-        return f"Fashion photography. {style} wearing {v_desc}. 45-degree side lighting, 8k."
+            return f"Commercial jewelry photography. {v_desc}. Background: Morandi warm tones, cream silk fabric folds, geometric podiums. 8k resolution, softbox light."
+        style = "Male model, tanned skin, neat stubble, black knitwear" if gen == "男性" else "Female model, dewy skin, soft makeup, white outfit, soft pink diffuse background"
+        return f"Fashion jewelry photography. {style} wearing {v_desc}. 45-degree cinematic side lighting, 8k."
 
     def run_seo(self, model_id, prompt, file):
         content = [{"type": "text", "text": prompt}]
@@ -101,70 +105,105 @@ class JewelryAIEngineV47:
             b64 = base64.b64encode(file.getvalue()).decode('utf-8')
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
         try:
-            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json={"model": model_id, "messages": [{"role": "user", "content": content}]}, timeout=60)
+            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, 
+                                json={"model": model_id, "messages": [{"role": "user", "content": content}]}, timeout=60)
             return res.json()['choices'][0]['message']['content']
-        except: return "❌ 分析失败"
+        except:
+            return None
 
-# --- 2. 前端 UI 与 缓存保护 ---
-st.set_page_config(page_title="饰品专家 V47.3", layout="wide")
+# --- 2. 前端界面与状态加固 ---
+st.set_page_config(page_title="饰品专家 V47.3 加固版", layout="wide")
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngineV47(api_key)
 
-# 强制初始化，防止 TypeError
+# 【Session State 初始化】强制确保变量存在
 for key in ["p_img", "m_img", "seo_txt"]:
-    if key not in st.session_state: st.session_state[key] = None
+    if key not in st.session_state:
+        st.session_state[key] = None
 
 st.title("💎 TikTok Shop 饰品 (V47.3)")
 
+# 侧边栏配置
 with st.sidebar:
     st.header("🛡️ 控制台")
-    m_txt = st.selectbox("文案模型", ALL_TEXT_MODELS) # 引用硬编码列表
-    m_img = st.selectbox("绘图模型", list(ALL_DRAWING_MODELS.keys())) # 引用硬编码列表
+    m_txt = st.selectbox("文案/标题模型", ALL_TEXT_MODELS) 
+    m_img = st.selectbox("图像渲染模型", list(ALL_DRAWING_MODELS.keys())) 
     st.divider()
-    u_title = st.text_input("1. 标题", "心形项链")
-    u_cat = st.selectbox("2. 类型", ["项链", "耳饰", "戒指", "手链", "套装"])
-    u_market = st.selectbox("3. 市场", ["东南亚", "北美", "欧洲"])
-    u_gender = st.radio("4. 性别", ["女性", "男性"], horizontal=True)
+    st.subheader("📋 经营信息")
+    u_title = st.text_input("1. 原始标题", "心形项链")
+    u_cat = st.selectbox("2. 商品类型", ["项链", "耳饰", "戒指", "手链", "套装"])
+    u_market = st.selectbox("3. 目标市场", ["东南亚", "北美", "欧洲"])
+    u_gender = st.radio("4. 模特性别", ["女性", "男性"], horizontal=True)
     st.divider()
-    u_file = st.file_uploader("📸 上传商品原图", type=["jpg", "png", "jpeg"])
-    if u_file: st.image(u_file, caption="原图预览", use_container_width=True)
+    u_file = st.file_uploader("📸 上传核心原图 (识图基准)", type=["jpg", "png", "jpeg"])
+    if u_file:
+        st.image(u_file, caption="原图已载入", use_container_width=True)
 
+# 进度提示区
 status_box = st.empty()
-tab_seo, tab_prod, tab_mod = st.tabs(["📊 SEO 优化结果", "🖼️ 商品图片结果", "👤 模特图片结果"])
 
-# 渲染逻辑增加 None 检查（解决 TypeError）
+# 中间选项卡切换
+tab_seo, tab_prod, tab_mod = st.tabs(["📊 标题 SEO 优化", "🖼️ 商品主图 (莫兰迪)", "👤 模特佩戴 (实拍感)"])
+
+# 【渲染逻辑加固】None检查 + 类型安全 + 异常捕获
 with tab_seo:
-    if st.session_state.seo_txt: st.markdown(st.session_state.seo_txt)
-    else: st.caption("（尚未生成）")
+    if st.session_state.seo_txt:
+        st.markdown(st.session_state.seo_txt)
+    else:
+        st.caption("（待执行标题优化任务）")
 
 with tab_prod:
     if st.session_state.p_img and isinstance(st.session_state.p_img, str):
-        st.image(Image.open(BytesIO(base64.b64decode(st.session_state.p_img.split(",")[-1]))), use_container_width=True)
-    else: st.caption("（待生成）")
+        try:
+            # 去除前缀并解码
+            clean_b64 = st.session_state.p_img.split(",")[-1].strip()
+            st.image(Image.open(BytesIO(base64.b64decode(clean_b64))), use_container_width=True)
+        except Exception as e:
+            st.error(f"商品图显示异常: {e}")
+    else:
+        st.caption("（预留位置：商品图生成后在此显示）")
 
 with tab_mod:
     if st.session_state.m_img and isinstance(st.session_state.m_img, str):
-        st.image(Image.open(BytesIO(base64.b64decode(st.session_state.m_img.split(",")[-1]))), use_container_width=True)
-    else: st.caption("（待生成）")
+        try:
+            clean_b64 = st.session_state.m_img.split(",")[-1].strip()
+            st.image(Image.open(BytesIO(base64.b64decode(clean_b64))), use_container_width=True)
+        except Exception as e:
+            st.error(f"模特图显示异常: {e}")
+    else:
+        st.caption("（预留位置：模特佩戴图生成后在此显示）")
 
+# 底部按钮区
 st.divider()
-st.subheader("🚀 专家指令")
+st.subheader("🚀 专家执行指令")
 c1, c2, c3 = st.columns(3)
 
 with c1:
     if st.button("✨ 执行：标题 SEO 优化", use_container_width=True):
-        if not u_file: st.warning("请上传图片"); st.stop()
-        st.session_state.seo_txt = engine.run_seo(m_txt, f"为{u_market}优化标题：{u_title}", u_file)
-        st.rerun()
+        if not u_file: st.warning("⚠️ 请先在侧边栏上传商品图片"); st.stop()
+        res = engine.run_seo(m_txt, f"为{u_market}市场优化此饰品的SEO标题。原标题：{u_title}", u_file)
+        if res:
+            st.session_state.seo_txt = res
+            st.rerun()
+        else:
+            st.error("❌ 标题优化任务执行失败，请检查 API 或更换模型。")
 
 with c2:
     if st.button("🖼️ 执行：商品图优化", use_container_width=True):
-        if not u_file: st.warning("请上传图片"); st.stop()
+        if not u_file: st.warning("⚠️ 请先在侧边栏上传商品图片"); st.stop()
         res = engine.run_smart_gen(m_img, "product", u_cat, u_market, u_gender, u_file, status_box)
-        if res: st.session_state.p_img = res; st.rerun()
+        if res: 
+            st.session_state.p_img = res
+            st.rerun()
+        else:
+            st.warning("⚠️ 生成失败：API 未返回图像数据，请尝试更换模型重试。")
 
 with c3:
     if st.button("👤 执行：模特图优化", use_container_width=True):
-        if not u_file: st.warning("请上传图片"); st.stop()
+        if not u_file: st.warning("⚠️ 请先在侧边栏上传商品图片"); st.stop()
         res = engine.run_smart_gen(m_img, "model", u_cat, u_market, u_gender, u_file, status_box)
-        if res: st.session_state.m_img = res; st.rerun()
+        if res: 
+            st.session_state.m_img = res
+            st.rerun()
+        else:
+            st.warning("⚠️ 生成失败：模特图渲染超时或失败。")
