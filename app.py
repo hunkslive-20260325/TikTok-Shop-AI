@@ -4,9 +4,10 @@ import base64
 from PIL import Image
 from io import BytesIO
 from datetime import datetime
+import time
 
-# --- 1. 后端引擎：模型全量回归 + 摄影级 Prompt 注入 ---
-class JewelryAIEngine:
+# --- 1. 后端类：深度优化视觉分析与进度监控 ---
+class JewelryAIEngineV47:
     def __init__(self, api_key):
         self.api_key = api_key
         self.headers = {
@@ -14,7 +15,7 @@ class JewelryAIEngine:
             "HTTP-Referer": "https://streamlit.io",
             "X-Title": "Jewelry_Visual_Expert_V47"
         }
-        # 【全部找回】17 个绘图模型 ID
+        # 17个绘图模型全量回归
         self.MODELS = {
             "openrouter/auto": "openrouter/auto",
             "google/gemini-2.5-flash-image": "google/gemini-2.5-flash-image",
@@ -35,43 +36,66 @@ class JewelryAIEngine:
             "google/gemini-2.5-flash-image-preview": "google/gemini-2.5-flash-image-preview"
         }
 
-    # 【核心逻辑】严格对齐您的摄影需求手册
-    def build_expert_prompt(self, task_type, category, market, gender):
-        if task_type == "product":
-            # 莫兰迪、丝缎、几何道具、45度柔光
-            return (f"Commercial jewelry photography of {category}. Background: Warm Morandi cream and beige tones. "
-                    f"Texture: Silk and satin fabric with natural elegant folds, matte paper base. "
-                    f"Props: Minimalist geometric podiums (cubes and polyhedrons) for 3D depth. "
-                    f"Lighting: Diffused softbox light from 45-degree above, no harsh shadows, 8k resolution.")
-        elif task_type == "model":
-            if gender == "男性":
-                # 小麦色皮肤、黑色针织衫、大地色虚化背景
-                return (f"Fashion photography. Male model with tanned skin, neat stubbles, defined facial contours. "
-                        f"Wearing {category}. Clothing: Solid black crew neck knitwear. "
-                        f"Background: Blurred taupe and sand earth tones. Lighting: 45-degree side lighting, highlighting metal luster.")
-            else:
-                # 水光肌、柔和妆容、窗边柔光、粉色/浅米色背景
-                return (f"Beauty photography. Female model with dewy glowing skin and soft makeup. "
-                        f"Wearing {category}. Clothing: Pure white elegant outfit. "
-                        f"Background: Diffused soft pink or champagne beige. Lighting: Soft window lighting, no shadows.")
-        return category
-
-    def log(self, level, msg):
+    def log(self, msg):
         if "logs" not in st.session_state: st.session_state.logs = []
-        st.session_state.logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] [{level}] {msg}")
+        st.session_state.logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
-    def run_gen(self, mid_key, p_type, cat, market, gen):
+    # 核心绘图逻辑：视觉锁定 + 进度条
+    def run_smart_gen(self, mid_key, p_type, cat, market, gen, file, status_box):
         mid = self.MODELS.get(mid_key)
-        final_prompt = self.build_expert_prompt(p_type, cat, market, gen)
-        payload = {"model": mid, "messages": [{"role": "user", "content": [{"type": "text", "text": final_prompt}]}], "modalities": ["image"]}
+        prog = status_box.progress(0, "🔍 第一步：深度识图分析中...")
+        
+        # 1. 识图：提取原图饰品特征
+        b64 = base64.b64encode(file.getvalue()).decode('utf-8')
+        v_payload = {
+            "model": "google/gemini-3.1-flash-image-preview",
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": "请提取此图片的饰品形状、材质和核心特征，用于生成一致的优化图。"},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}}
+            ]}]
+        }
         try:
-            self.log("INFO", f"执行生成任务: {mid}")
-            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json=payload, timeout=60)
+            v_res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json=v_payload, timeout=60)
+            v_desc = v_res.json()['choices'][0]['message']['content']
+            prog.progress(35, "🎯 第二步：结合摄影规范构思 Prompt...")
+        except:
+            v_desc = f"Specific {cat} jewelry from the uploaded image"
+
+        # 2. 构造 Prompt (注入你的商业摄影规范)
+        expert_prompt = self.get_expert_prompt(p_type, cat, market, gen, v_desc)
+        
+        # 3. 渲染
+        prog.progress(60, f"🎨 第三步：调用 {mid_key} 进行渲染...")
+        payload = {
+            "model": mid,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": expert_prompt}]}],
+            "modalities": ["image"]
+        }
+        try:
+            res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json=payload, timeout=90)
             if res.status_code == 200:
                 img = res.json()['choices'][0]['message'].get('images', [None])[0]
-                return img, mid
-            return None, f"Error {res.status_code}"
-        except Exception as e: return None, str(e)
+                prog.progress(100, "✅ 生成成功！")
+                time.sleep(1)
+                status_box.empty()
+                return img
+            prog.progress(100, f"❌ 失败: {res.status_code}")
+            return None
+        except Exception as e:
+            st.error(f"渲染异常: {str(e)}")
+            return None
+
+    def get_expert_prompt(self, p_type, cat, market, gen, v_desc):
+        if p_type == "product":
+            return (f"Commercial jewelry photography. Product: {v_desc}. Background: Morandi cream and beige tones, silk satin fabric texture with natural folds. "
+                    f"Props: Minimalist geometric podiums. Lighting: 45-degree softbox light, soft shadows, premium 8k.")
+        else:
+            if gen == "男性":
+                return (f"Fashion photography. Male model with tanned skin and neat stubbles wearing {v_desc}. "
+                        f"Clothing: Black crew neck knitwear. Background: Blurred taupe earth tones. 45-degree side light.")
+            else:
+                return (f"Beauty photography. Female model with dewy glowing skin wearing {v_desc}. "
+                        f"Clothing: Elegant white. Background: Diffused soft pink/champagne. Soft window lighting.")
 
     def run_seo(self, model_id, prompt, file):
         content = [{"type": "text", "text": prompt}]
@@ -82,58 +106,79 @@ class JewelryAIEngine:
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, 
                                 json={"model": model_id, "messages": [{"role": "user", "content": content}]}, timeout=60)
             return res.json()['choices'][0]['message']['content']
-        except: return "❌ SEO 任务失败"
+        except: return "❌ 分析失败"
 
-# --- 2. UI 布局：找回所有经营输入项 & 按钮名称 ---
-st.set_page_config(page_title="饰品全能 AI 专家", layout="wide")
+# --- 2. 前端 UI 布局 ---
+st.set_page_config(page_title="饰品专家 V47", layout="wide")
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
-engine = JewelryAIEngine(api_key)
+engine = JewelryAIEngineV47(api_key)
 
-if "gallery" not in st.session_state: st.session_state.gallery = []
-if "seo_res" not in st.session_state: st.session_state.seo_res = ""
+if "p_img" not in st.session_state: st.session_state.p_img = None
+if "m_img" not in st.session_state: st.session_state.m_img = None
+if "seo_txt" not in st.session_state: st.session_state.seo_txt = ""
+
+# 顶部名称精简
+st.title("💎 TikTok Shop 饰品 (V47.0)")
 
 with st.sidebar:
-    st.title("🛡️ 控制台")
+    st.header("🛡️ 控制台")
+    st.button("刷新状态")
     st.divider()
-    st.subheader("⚙️ 模型配置")
-    # 【全部找回】7 个文案优化模型
-    m_txt = st.selectbox("文案模型", [
-        "google/gemini-3.1-flash-image-preview", "openai/gpt-5-image-mini", 
-        "google/gemini-2.5-flash-image", "google/gemini-3-pro-image-preview",
-        "openai/gpt-5-image", "google/gemini-2.5-flash-image-preview", "openrouter/auto"
-    ])
+    m_txt = st.selectbox("文案模型", ["google/gemini-3.1-flash-image-preview", "openai/gpt-5-image-mini", "openrouter/auto"])
     m_img = st.selectbox("绘图模型", list(engine.MODELS.keys()))
-
     st.divider()
-    st.subheader("📋 任务参数")
-    u_title = st.text_input("1. 原始标题", "S925银心形项链")
-    u_cat = st.selectbox("2. 商品类型", ["项链", "耳饰", "戒指", "手链"])
-    u_market = st.selectbox("3. 目标市场", ["东南亚总区", "北美地区", "欧洲地区", "中东地区"])
-    u_gender = st.radio("4. 目标性别趋势", ["女性", "男性"], horizontal=True)
+    st.subheader("📋 经营信息")
+    u_title = st.text_input("1. 原始标题", "心形项链")
+    u_cat = st.selectbox("2. 类型", ["项链", "耳饰", "戒指", "手链", "套装"])
+    u_market = st.selectbox("3. 市场", ["东南亚", "北美", "欧洲"])
+    u_gender = st.radio("4. 性别", ["女性", "男性"], horizontal=True)
+    st.divider()
     u_file = st.file_uploader("📸 上传商品原图", type=["jpg", "png", "jpeg"])
+    if u_file: st.image(Image.open(u_file), caption="已上传原图", use_container_width=True)
 
-# --- 主界面 ---
-st.header("💎 TikTok Shop 饰品全能 AI 专家 (V47.0 商业级渲染版)")
-c_btn, c_res = st.columns([1, 1.5])
+# 进度显示区
+status_box = st.empty()
 
-with c_btn:
-    st.subheader("✨ 专家指令")
+# 中间选项卡切换模式
+tab_seo, tab_prod, tab_mod = st.tabs(["📊 标题 SEO 优化", "🖼️ 商品图片结果", "👤 模特图片结果"])
+
+with tab_seo:
+    if st.session_state.seo_txt:
+        st.markdown(st.session_state.seo_txt)
+    else:
+        st.info("等待执行标题优化任务...")
+
+with tab_prod:
+    if st.session_state.p_img:
+        st.image(Image.open(BytesIO(base64.b64decode(st.session_state.p_img))), caption="优化后的莫兰迪主图", use_container_width=True)
+    else:
+        st.caption("（预留位置：商品主图生成后在此显示）")
+
+with tab_mod:
+    if st.session_state.m_img:
+        st.image(Image.open(BytesIO(base64.b64decode(st.session_state.m_img))), caption="优化后的模特实拍图", use_container_width=True)
+    else:
+        st.caption("（预留位置：模特佩戴图生成后在此显示）")
+
+# 下方按钮区域
+st.divider()
+st.subheader("🚀 专家指令")
+c1, c2, c3 = st.columns(3)
+
+with c1:
     if st.button("✨ 执行：标题 SEO 优化", use_container_width=True):
-        st.session_state.seo_res = engine.run_seo(m_txt, f"分析此饰品，针对{u_market}市场生成爆款 SEO 标题", u_file)
-            
+        if not u_file: st.warning("请先上传图片"); st.stop()
+        st.session_state.seo_txt = engine.run_seo(m_txt, f"优化标题'{u_title}'针对{u_market}市场", u_file)
+        st.rerun()
+
+with c2:
     if st.button("🖼️ 执行：商品图优化", use_container_width=True):
-        res, mid = engine.run_gen(m_img, "product", u_cat, u_market, u_gender)
-        if res: st.session_state.gallery.append({"u": res, "m": mid, "t": "莫兰迪商品图"})
+        if not u_file: st.warning("请先上传图片"); st.stop()
+        res = engine.run_smart_gen(m_img, "product", u_cat, u_market, u_gender, u_file, status_box)
+        if res: st.session_state.p_img = res; st.rerun()
 
+with c3:
     if st.button("👤 执行：模特图优化", use_container_width=True):
-        res, mid = engine.run_gen(m_img, "model", u_cat, u_market, u_gender)
-        if res: st.session_state.gallery.append({"u": res, "m": mid, "t": "模特实拍图"})
-
-with c_res:
-    if st.session_state.seo_res:
-        with st.container(border=True): st.info("SEO 建议"), st.markdown(st.session_state.seo_res)
-    if st.session_state.gallery:
-        grid = st.columns(2)
-        for i, item in enumerate(st.session_state.gallery):
-            with grid[i%2]:
-                st.image(Image.open(BytesIO(base64.b64decode(str(item['u']).split(",")[-1]))), caption=item['t'])
+        if not u_file: st.warning("请先上传图片"); st.stop()
+        res = engine.run_smart_gen(m_img, "model", u_cat, u_market, u_gender, u_file, status_box)
+        if res: st.session_state.m_img = res; st.rerun()
