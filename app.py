@@ -20,6 +20,7 @@ try:
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
     # 使用 1.5 Flash 兼顾速度与多模态能力
     model = genai.GenerativeModel('gemini-1.5-flash-latest')
+    # model = genai.GenerativeModel('gemini-1.5-pro-latest')
 except:
     st.error("⚠️ 请在 Streamlit Secrets 中配置 GOOGLE_API_KEY")
     st.stop()
