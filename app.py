@@ -1,171 +1,155 @@
 import streamlit as st
 import requests
 import traceback
-import time
+import base64
 from datetime import datetime
 from PIL import Image
-import io
 
 # ==========================================
-# 1. 后端核心类：带日志与余额监控
+# 1. 后端逻辑：精准余额计算 + 图片视觉处理
 # ==========================================
-class OpenRouterManager:
-    def __init__(self):
-        self.api_key = st.secrets.get("OPENROUTER_API_KEY", "")
+class OpenRouterBackend:
+    def __init__(self, api_key):
+        self.api_key = api_key
         self.base_url = "https://openrouter.ai/api/v1"
         self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "Jewelry_AI_Pro_V30"
+            "X-Title": "Jewelry_Visual_Pro_V33"
         }
 
-    def log_event(self, level, message):
-        """记录服务日志到 session_state"""
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"[{timestamp}] [{level}] {message}"
-        if "service_logs" not in st.session_state:
-            st.session_state.service_logs = []
-        st.session_state.service_logs.append(entry)
+    def log(self, level, msg):
+        if "logs" not in st.session_state: st.session_state.logs = []
+        st.session_state.logs.append(f"[{datetime.now().strftime('%H:%M:%S')}] [{level}] {msg}")
 
     def get_balance(self):
-        """查询 Key 余额"""
+        """稳健查询余额，防止页面报错"""
         try:
-            res = requests.get(f"{self.base_url}/key", headers=self.headers, timeout=10)
+            # 严格遵循 2026 OpenRouter /key 接口规范
+            res = requests.get(f"{self.base_url}/key", headers=self.headers, timeout=5)
             if res.status_code == 200:
-                data = res.json()
-                # 2026 官方返回结构：data['data']['usage'] 或 'limit'
-                balance = data.get('data', {}).get('limit', 0) - data.get('data', {}).get('usage', 0)
-                return round(balance, 4)
-            return "N/A"
-        except Exception:
-            return "Error"
+                data = res.json().get('data', {})
+                # 计算逻辑：额度上限 - 已用额度
+                limit = data.get('limit', 0)
+                usage = data.get('usage', 0)
+                return f"{round(limit - usage, 4)} USD"
+            return "Key权限受限"
+        except:
+            return "网络延迟"
 
-    def execute_task(self, model_id, messages, is_image=False):
-        """通用执行器，带详细报错定位"""
-        if not self.api_key:
-            return False, "⚠️ 未配置 OPENROUTER_API_KEY", None
+    def encode_image(self, uploaded_file):
+        """将上传图片转为符合 OpenAI 视觉规范的 Base64"""
+        if uploaded_file:
+            return base64.b64encode(uploaded_file.getvalue()).decode('utf-8')
+        return None
 
-        payload = {"model": model_id, "messages": messages}
-        if is_image:
-            payload["modalities"] = ["image"] # 对齐 2026 绘图规范
+    def run_task(self, model_id, prompt, image_file=None, is_gen=False):
+        """全能执行器：支持识图文案与绘图生成"""
+        url = f"{self.base_url}/chat/completions"
+        
+        # 构建消息体
+        content = [{"type": "text", "text": prompt}]
+        img_b64 = self.encode_image(image_file)
+        
+        # 如果有图且不是纯绘图任务，则加入视觉数据
+        if img_b64 and not is_gen:
+            content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}
+            })
+            self.log("INFO", "AI 已接收并开始分析上传的图片")
 
-        start_time = time.time()
+        payload = {
+            "model": model_id,
+            "messages": [{"role": "user", "content": content}]
+        }
+        if is_gen: payload["modalities"] = ["image"]
+
         try:
-            self.log_event("INFO", f"开始调用模型: {model_id}")
-            response = requests.post(f"{self.base_url}/chat/completions", headers=self.headers, json=payload, timeout=90)
-            
-            # 增加严谨的 HTTP 状态校验
-            if response.status_code != 200:
-                err_raw = response.text
-                self.log_event("ERROR", f"API 返回非200状态: {err_raw}")
-                return False, f"API 状态错误 ({response.status_code}): {err_raw}", model_id
-
-            data = response.json()
-            if "choices" in data:
+            res = requests.post(url, headers=self.headers, json=payload, timeout=90)
+            data = res.json()
+            if res.status_code == 200:
                 msg = data['choices'][0]['message']
-                # 处理图片
-                if is_image:
-                    img_data = msg.get("images", [None])[0] or msg.get("content", "")
-                    if len(str(img_data)) < 100 and not str(img_data).startswith("http"):
-                        return False, f"模型未返回有效图片，仅返回文本: {img_data}", model_id
-                    self.log_event("SUCCESS", f"图片生成成功，耗时 {round(time.time()-start_time, 2)}s")
-                    return True, img_data, model_id
-                
-                self.log_event("SUCCESS", "文案生成成功")
-                return True, msg.get("content", ""), model_id
-            
-            return False, f"数据结构异常: {str(data)}", model_id
-
-        except Exception as e:
-            # 核心：捕获具体代码位置
-            full_error = traceback.format_exc()
-            self.log_event("CRITICAL", f"代码执行崩溃:\n{full_error}")
-            return False, f"程序内部错误，请检查日志末尾。\n类型: {type(e).__name__}", model_id
+                if is_gen:
+                    return True, msg.get("images", [None])[0] or msg.get("content", "")
+                return True, msg.get("content", "")
+            return False, f"API 报错: {data.get('error', {}).get('message', '未知错误')}"
+        except Exception:
+            return False, f"系统崩溃: {traceback.format_exc().splitlines()[-1]}"
 
 # ==========================================
-# 2. 前端 UI 层
+# 2. 前端 UI：布局对齐截图
 # ==========================================
 def main():
-    st.set_page_config(page_title="饰品专家 V30", layout="wide", initial_sidebar_state="expanded")
-    
-    # 初始化
-    if "data_store" not in st.session_state:
-        st.session_state.data_store = {"seo": "", "imgs": []}
-    if "service_logs" not in st.session_state:
-        st.session_state.service_logs = [f"[{datetime.now()}] 系统初始化完毕"]
+    st.set_page_config(page_title="饰品专家 V33", layout="wide")
+    if "store" not in st.session_state:
+        st.session_state.store = {"seo": "", "imgs": []}
 
-    mgr = OpenRouterManager()
+    # 获取 Secrets
+    key = st.secrets.get("OPENROUTER_API_KEY", "")
+    backend = OpenRouterBackend(key)
 
-    # --- 侧边栏 ---
+    # --- 侧边栏：控制台 ---
     with st.sidebar:
         st.title("🛡️ 控制台")
+        # 实时余额显示
+        st.metric("API 剩余额度", backend.get_balance())
+        if st.button("🔄 刷新状态"): st.rerun()
         
-        # 余额反显
-        with st.container(border=True):
-            col_b1, col_b2 = st.columns([2, 1])
-            col_b1.metric("API 余额 (USD)", mgr.get_balance())
-            if col_b2.button("🔄 刷新"): st.rerun()
+        st.divider()
+        txt_m = st.selectbox("识图/文案模型", ["google/gemini-2.0-flash-001", "anthropic/claude-3-haiku"])
+        img_m = st.selectbox("绘图模型", ["black-forest-labs/flux-schnell", "openai/dall-e-3"])
+        
+        st.divider()
+        st.header("📋 经营信息")
+        u_title = st.text_input("1. 原始标题", "心形项链")
+        u_cat = st.selectbox("2. 类型", ["项链", "手链", "耳环", "戒指"])
+        u_mkt = st.selectbox("3. 市场", ["东南亚", "美国", "英国"])
+        u_gen = st.radio("4. 性别", ["女性", "男性"], horizontal=True)
 
         st.divider()
-        st.header("⚙️ 模型配置")
-        txt_mod = st.selectbox("文案模型", ["google/gemini-2.0-flash-001", "deepseek/deepseek-chat"])
-        img_mod = st.selectbox("绘图模型", ["black-forest-labs/flux-schnell", "openai/dall-e-3", "google/imagen-3"])
-        
-        st.divider()
-        st.header("📋 任务参数")
-        u_title = st.text_input("1. 原始标题", value="S925银心形项链")
-        u_cat = st.selectbox("2. 商品类型", ["项链", "手链", "耳环", "戒指"])
-        u_mkt = st.selectbox("3. 目标市场", ["东南亚总区", "美国", "英国"])
-        u_gen = st.radio("4. 目标性别趋势", ["女性", "男性"], horizontal=True)
+        # 上传组件：回归并锁定
+        u_file = st.file_uploader("🖼️ 上传商品原图", type=["jpg", "png", "jpeg"])
+        if u_file:
+            st.image(Image.open(u_file), caption="原图已锁定", use_container_width=True)
 
     # --- 主界面 ---
-    st.header("💎 TikTok Shop 饰品全能 AI 专家 (监控版)")
+    st.header("💎 TikTok Shop 饰品全能 AI 专家 (V33 终极修正)")
     
-    t1, t2, t3 = st.tabs(["🚀 任务执行", "📜 服务日志", "📦 历史记录"])
+    col_run, col_show = st.columns([1, 1.2])
 
-    with t1:
-        c1, c2 = st.columns([1, 1.2])
-        with c1:
-            if st.button("✨ 执行：标题 SEO 优化", use_container_width=True):
-                with st.spinner("请求中..."):
-                    ok, res, _ = mgr.execute_task(txt_mod, [{"role": "user", "content": f"优化饰品标题: {u_title}"}])
-                    if ok: st.session_state.data_store["seo"] = res
-                    else: st.error(res)
-            
-            if st.button("🖼️ 执行：商品图优化", use_container_width=True):
-                with st.spinner("绘图中..."):
-                    ok, res, mod = mgr.execute_task(img_mod, [{"role": "user", "content": f"Jewelry photo of {u_cat}"}], is_image=True)
-                    if ok: st.session_state.data_store["imgs"].append({"u": res, "m": mod, "t": "主图"})
-                    else: st.error(res)
+    with col_run:
+        st.subheader("🚀 专家指令")
+        if st.button("✨ 1. 识图并优化标题", use_container_width=True):
+            with st.spinner("AI 正在观察图片..."):
+                prompt = f"请分析图片中的饰品，结合原始标题'{u_title}'，针对{u_mkt}{u_gen}市场，输出 3 个高转化 SEO 标题。"
+                ok, res = backend.run_task(txt_m, prompt, image_file=u_file)
+                if ok: st.session_state.store["seo"] = res
+                else: st.error(res)
 
-            if st.button("👤 执行：模特图优化", use_container_width=True):
-                with st.spinner("生成模特..."):
-                    ok, res, mod = mgr.execute_task(img_mod, [{"role": "user", "content": f"Model wearing {u_cat}"}], is_image=True)
-                    if ok: st.session_state.data_store["imgs"].append({"u": res, "m": mod, "t": "模特图"})
-                    else: st.error(res)
+        if st.button("🖼️ 2. 生成莫兰迪主图", use_container_width=True):
+            with st.spinner("绘图中..."):
+                prompt = f"Jewelry photo of {u_cat}, Morandi cream background, 8k"
+                ok, res = backend.run_task(img_m, prompt, is_gen=True)
+                if ok: st.session_state.store["imgs"].append({"u": res, "m": img_m})
+                else: st.error(res)
 
-        with c2:
-            if st.session_state.data_store["seo"]:
-                st.info("SEO 建议结果")
-                st.markdown(st.session_state.data_store["seo"])
-            
-            if st.session_state.data_store["imgs"]:
-                grid = st.columns(2)
-                for i, item in enumerate(st.session_state.data_store["imgs"]):
-                    with grid[i % 2]:
-                        st.image(item["u"], caption=f"{item['t']} ({item['m']})")
+    with col_show:
+        st.subheader("📊 成果展示")
+        if st.session_state.store["seo"]:
+            st.success("SEO 标题建议已生成")
+            st.markdown(st.session_state.store["seo"])
+        
+        if st.session_state.store["imgs"]:
+            grid = st.columns(2)
+            for i, item in enumerate(st.session_state.store["imgs"]):
+                with grid[i % 2]:
+                    st.image(item["u"], caption=f"引擎: {item['m']}")
 
-    with t2:
-        st.subheader("🛠️ 实时服务日志")
-        log_text = "\n".join(st.session_state.service_logs[::-1]) # 倒序显示最新内容
-        st.text_area("Log Output", log_text, height=400)
-        st.download_button("📥 下载完整日志", data=log_text, file_name=f"service_log_{datetime.now().strftime('%m%d_%H%M')}.txt")
-
-    with t3:
-        if st.button("🗑️ 清空当前所有缓存"):
-            st.session_state.data_store = {"seo": "", "imgs": []}
-            st.rerun()
+    # 日志区
+    with st.expander("🛠️ 开发者调试日志"):
+        logs = "\n".join(st.session_state.get("logs", [])[::-1])
+        st.text_area("Log Output", logs, height=200)
 
 if __name__ == "__main__":
     main()
