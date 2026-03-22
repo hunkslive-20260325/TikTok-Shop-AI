@@ -1,7 +1,3 @@
-# streamlit
-# google-generativeai
-# Pillow
-# python-dotenv
 streamlit
-google-generativeai>=0.8.3
+requests
 Pillow
