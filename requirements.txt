@@ -1,3 +1,4 @@
 streamlit
 requests
 Pillow
+streamlit==1.55.0
