@@ -5,16 +5,16 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 
-# --- 1. 后端类：注入 17 个指定模型 ID ---
+# --- 1. 后端类：保持 17 个绘图模型，文案模型由 UI 层动态控制 ---
 class JewelryAIEngine:
     def __init__(self, api_key):
         self.api_key = api_key
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "Jewelry_Visual_V44"
+            "X-Title": "Jewelry_Visual_V45"
         }
-        # 严格按照你提供的列表更新绘图模型
+        # 绘图模型列表保持 V44.0 的完整阵容
         self.MODELS = {
             "OpenRouter Auto (自动选择)": "openrouter/auto",
             "Google Gemini 2.5 Flash Image": "google/gemini-2.5-flash-image",
@@ -56,13 +56,12 @@ class JewelryAIEngine:
             "modalities": ["image"]
         }
         try:
-            self.log("INFO", f"正在执行: {mid}")
+            self.log("INFO", f"正在生成图片: {mid}")
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, json=payload, timeout=60)
             if res.status_code == 200:
                 img = res.json()['choices'][0]['message'].get('images', [None])[0]
                 return img, mid
-            self.log("ERROR", f"API 异常 ({res.status_code}): {res.text[:100]}")
-            return None, f"API 状态错误 ({res.status_code})"
+            return None, f"API 错误 ({res.status_code})"
         except Exception as e:
             return None, str(e)
 
@@ -72,12 +71,13 @@ class JewelryAIEngine:
             b64 = base64.b64encode(file.getvalue()).decode('utf-8')
             content.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64}"}})
         try:
+            self.log("INFO", f"正在优化文案: {model_id}")
             res = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=self.headers, 
                                 json={"model": model_id, "messages": [{"role": "user", "content": content}]}, timeout=60)
             return res.json()['choices'][0]['message']['content']
         except: return "❌ SEO 任务执行失败"
 
-# --- 2. 保持 UI 逻辑与输入项不动 ---
+# --- 2. UI 层：注入 7 个文案优化模型 ---
 st.set_page_config(page_title="TikTok Shop 饰品 AI 专家", layout="wide")
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngine(api_key)
@@ -85,7 +85,6 @@ engine = JewelryAIEngine(api_key)
 if "seo_box" not in st.session_state: st.session_state.seo_box = ""
 if "gallery" not in st.session_state: st.session_state.gallery = []
 
-# --- 侧边栏：完整找回输入项 ---
 with st.sidebar:
     st.title("🛡️ 控制台")
     col_bal, col_ref = st.columns([2, 1])
@@ -95,8 +94,19 @@ with st.sidebar:
 
     st.divider()
     st.subheader("⚙️ 模型配置")
-    m_txt = st.selectbox("文案模型", ["google/gemini-2.0-flash-001", "deepseek/deepseek-chat"])
-    m_img = st.selectbox("绘图模型", list(engine.MODELS.keys()), index=0) # 默认 Auto
+    # --- 核心修改：文案模型列表扩容 ---
+    m_txt = st.selectbox("文案模型", [
+        "openrouter/auto",
+        "google/gemini-2.5-flash-image",
+        "google/gemini-3.1-flash-image-preview",
+        "google/gemini-3-pro-image-preview",
+        "openai/gpt-5-image-mini",
+        "openai/gpt-5-image",
+        "google/gemini-2.5-flash-image-preview",
+        "google/gemini-2.0-flash-001",
+        "deepseek/deepseek-chat"
+    ])
+    m_img = st.selectbox("绘图模型", list(engine.MODELS.keys()), index=0)
 
     st.divider()
     st.subheader("📋 任务参数")
