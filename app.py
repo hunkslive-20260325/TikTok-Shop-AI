@@ -1,101 +1,103 @@
 import streamlit as st
-import google.generativeai as genai
-from PIL import Image
+import requests
 import time
-from datetime import datetime
+from PIL import Image
 
-# --- 1. 初始状态存储 ---
-if "optimized_data" not in st.session_state:
-    st.session_state.optimized_data = {"titles": None, "img_prompts": None, "active_model": "尚未调用"}
+# --- 1. 初始状态与页面配置 ---
+st.set_page_config(page_title="TikTok 饰品优化专家 - DeepSeek", layout="wide")
+st.title("💎 TikTok Shop 饰品全能优化助手 (DeepSeek 驱动)")
 
-# --- 2. 页面 UI 配置 ---
-st.set_page_config(page_title="TikTok Shop 饰品 AI 专家", layout="wide")
-st.title("💎 TikTok Shop 饰品全能优化助手")
-st.info(f"🤖 当前工作模型：{st.session_state.optimized_data.get('active_model', '等待指令')}")
+if "optimized_titles" not in st.session_state:
+    st.session_state.optimized_titles = None
+if "visual_advice" not in st.session_state:
+    st.session_state.visual_advice = None
 
-# --- 3. API 配置 ---
-try:
-    if "GOOGLE_API_KEY" not in st.secrets:
-        st.error("❌ 未找到 API KEY，请在 Secrets 中配置。")
-        st.stop()
-    genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-except Exception as e:
-    st.error(f"配置错误: {e}")
-    st.stop()
+# --- 2. API 配置 (从 Secrets 读取) ---
+DEEPSEEK_KEY = st.secrets.get("DEEPSEEK_API_KEY")
+API_URL = "https://api.deepseek.com/chat/completions"
 
-# --- 4. 定义模型推荐优先级梯队 (严格匹配你的可用列表) ---
-# 优先级说明：Flash(快) -> Pro(强) -> Lite(稳/高配额)
-MODEL_HIERARCHY = [
-    'gemini-flash-latest',       # 1. 综合最优
-    'gemini-2.0-flash-001',     # 2. 备选新版
-    'gemini-flash-lite-latest',  # 3. 最终保底（Lite版最不容易报429）
-    'gemini-3-flash-preview'     # 4. 预览版尝试
-]
+def call_deepseek(prompt):
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {DEEPSEEK_KEY}"
+    }
+    payload = {
+        "model": "deepseek-chat", # 使用 DeepSeek-V3 模型
+        "messages": [
+            {"role": "system", "content": "你是一位精通 TikTok Shop 东南亚市场的饰品运营专家。"},
+            {"role": "user", "content": prompt}
+        ],
+        "temperature": 0.7
+    }
+    response = requests.post(API_URL, json=payload, headers=headers)
+    if response.status_code == 200:
+        return response.json()['choices'][0]['message']['content']
+    else:
+        return f"❌ 调用失败 (错误代码: {response.status_code}): {response.text}"
 
-# --- 5. 自动切换逻辑函数 ---
-def try_generate_content(content):
-    last_error = ""
-    # 按照优先级依次尝试每个模型
-    for model_name in MODEL_HIERARCHY:
-        try:
-            with st.spinner(f"正在尝试使用模型: {model_name}..."):
-                current_model = genai.GenerativeModel(model_name)
-                response = current_model.generate_content(content)
-                # 如果成功，记录当前使用的模型并返回结果
-                st.session_state.optimized_data["active_model"] = model_name
-                return response
-        except Exception as e:
-            last_error = str(e)
-            if "429" in last_error:
-                st.warning(f"⚠️ {model_name} 配额已满，正在自动切换下一模型...")
-                time.sleep(1) # 短暂冷却
-                continue
-            else:
-                st.warning(f"❌ {model_name} 报错: {last_error[:50]}... 尝试切换...")
-                continue
-    
-    # 如果所有模型都失败了
-    raise Exception(f"所有模型均尝试失败。最后一次报错: {last_error}")
-
-# --- 6. 侧边栏与主界面 ---
+# --- 3. 界面布局 ---
 with st.sidebar:
     st.header("📥 商品输入")
-    origin_title = st.text_input("原始标题", "心形 925 银项链")
-    category = st.selectbox("商品类型", ["项链", "耳环", "戒指", "手链"])
-    uploaded_files = st.file_uploader("上传原图", type=["jpg", "png", "jpeg"])
+    origin_title = st.text_input("1. 原始标题", "心形 925 银项链")
+    category = st.selectbox("2. 商品类型", ["项链", "耳环", "戒指", "手链", "耳钉", "脚链"])
+    market = st.selectbox("3. 目标市场", ["东南亚总区", "马来西亚", "泰国", "越南", "菲律宾"])
+    gender = st.radio("4. 目标人群", ["女性", "男性"])
+    uploaded_file = st.file_uploader("5. 上传预览图", type=["jpg", "png", "jpeg"])
+    
     st.divider()
-    if st.button("🔄 重置会话"):
-        st.session_state.optimized_data = {"titles": None, "img_prompts": None, "active_model": "尚未调用"}
+    if st.button("🔄 重置所有内容"):
+        st.session_state.clear()
         st.rerun()
 
 col_left, col_right = st.columns([1.5, 1])
 
 with col_left:
-    if st.button("✨ 执行全能优化"):
-        if not origin_title:
-            st.error("请先输入标题")
+    # --- 按钮 1：标题 SEO 优化 ---
+    if st.button("✨ 执行全能 SEO 标题优化"):
+        if not DEEPSEEK_KEY:
+            st.error("请先在 Secrets 中配置 DEEPSEEK_API_KEY")
         else:
-            # 构造 Prompt
-            prompt = f"针对东南亚市场，优化{category}标题: '{origin_title}'。请结合热搜词提供3个建议和中文翻译。"
-            input_data = [prompt]
-            if uploaded_files:
-                input_data.append(Image.open(uploaded_files))
-            
-            try:
-                res = try_generate_content(input_data)
-                st.session_state.optimized_data["titles"] = res.text
-                st.success(f"✅ 调用成功！当前模型: {st.session_state.optimized_data['active_model']}")
-            except Exception as final_e:
-                st.error(f"🚨 最终失败: {final_e}")
+            with st.status("DeepSeek 正在搜索热词并生成标题...", expanded=True):
+                prompt = f"""
+                作为饰品运营专家，请优化此{category}标题: '{origin_title}'。
+                市场: {market}，受众: {gender}。
+                要求：
+                1. 给出 3 个高转化标题（包含爆款关键词）。
+                2. 解释每个标题的 SEO 逻辑。
+                3. 提供对应中文翻译。
+                """
+                st.session_state.optimized_titles = call_deepseek(prompt)
+                st.success("标题优化完成！")
 
-    if st.session_state.optimized_data["titles"]:
-        st.markdown("### 📝 优化方案")
-        st.write(st.session_state.optimized_data["titles"])
+    if st.session_state.optimized_titles:
+        st.markdown("### 📝 标题优化建议")
+        st.write(st.session_state.optimized_titles)
+
+    st.divider()
+
+    # --- 按钮 2：视觉拍摄建议 (Midjourney 指令) ---
+    if st.button("📸 生成 AI 视觉优化建议"):
+        with st.status("正在设计高质量拍摄方案...", expanded=True):
+            prompt = f"""
+            为这款{gender}款{category}设计一套高质感拍摄方案。
+            请提供：
+            1. 2条用于 AI 绘图的 Midjourney 提示词（英文）。
+            2. 场景描述：要求莫兰迪色调背景、丝绸纹理、高级珠宝光影。
+            3. 模特建议：要求展示佩戴细节，肤质要求水光肌。
+            """
+            st.session_state.visual_advice = call_deepseek(prompt)
+            st.success("视觉建议已生成！")
+
+    if st.session_state.visual_advice:
+        st.markdown("### 🖼️ 拍摄与视觉建议")
+        st.write(st.session_state.visual_advice)
 
 with col_right:
     st.subheader("🖼️ 图片预览")
-    if uploaded_files:
-        st.image(uploaded_files, width="stretch")
+    if uploaded_file:
+        st.image(uploaded_file, caption="待优化商品图", use_container_width=True)
+    else:
+        st.info("上传图片后将在此处显示预览")
 
-# 样式
-st.markdown("<style>.stButton>button { width: 100%; border-radius: 8px; }</style>", unsafe_allow_html=True)
+# 样式美化
+st.markdown("<style>.stButton>button { width: 100%; border-radius: 10px; height: 3em; background-color: #f8f9fb; font-weight: bold; }</style>", unsafe_allow_html=True)
