@@ -1,156 +1,147 @@
 import streamlit as st
 import requests
 import time
-import base64
 import zipfile
 import io
-from PIL import Image
 from datetime import datetime
 
 # --- 1. 页面配置与美化 ---
-st.set_page_config(page_title="TikTok Shop 饰品 AI 专家", layout="wide")
-
+st.set_page_config(page_title="TikTok Shop 饰品 AI 专家 (DeepSeek版)", layout="wide")
 st.markdown("""
-<style>
-    .stButton>button { width: 100%; border-radius: 12px; height: 3.5em; font-weight: bold; transition: 0.3s; }
-    .stButton>button:hover { background-color: #ff4b4b; color: white; border: none; }
-    .image-container { cursor: pointer; border-radius: 10px; overflow: hidden; transition: transform 0.2s; }
-    .image-container:hover { transform: scale(1.02); }
-    .status-text { color: #666; font-size: 0.9em; }
-</style>
+    <style>
+    .stButton>button { width: 100%; border-radius: 10px; height: 3.8em; font-weight: bold; background: #2b2b2b; color: white; }
+    .stButton>button:hover { background: #ff4b4b; border: none; }
+    .result-card { padding: 20px; border-radius: 15px; background: #f8f9fa; border: 1px solid #eee; margin-bottom: 20px; }
+    .img-box { border: 2px dashed #ccc; border-radius: 10px; padding: 10px; text-align: center; }
+    </style>
 """, unsafe_allow_html=True)
 
-# --- 2. 状态初始化 ---
-if "results" not in st.session_state:
-    st.session_state.results = {"titles": None, "images": [], "process_log": ""}
-if "enlarged_img" not in st.session_state:
-    st.session_state.enlarged_img = None
+# --- 2. Session State 初始化 ---
+if "data" not in st.session_state:
+    st.session_state.data = {"seo": None, "visual": None, "model_shot": None, "logs": []}
 
-# --- 3. 核心 API 函数 ---
-def call_deepseek_seo(payload_data):
-    """调用 DeepSeek 进行多平台 SEO 优化"""
+def add_log(msg):
+    st.session_state.data["logs"].append(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+
+# --- 3. DeepSeek 核心调用 ---
+def call_deepseek(prompt):
     api_key = st.secrets.get("DEEPSEEK_API_KEY")
-    url = "https://api.deepseek.com/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-    
-    prompt = f"""
-    你是一名顶级电商运营专家。
-    原始标题: {payload_data['title']}
-    类型: {payload_data['category']} | 市场: {payload_data['market']} | 年龄: {payload_data['age']} | 性别: {payload_data['gender']}
-    
-    任务：
-    1. 参考 TikTok/Amazon/Etsy/Google Ads 饰品热词。
-    2. 返回 3 个优化标题（按优先级排序）。
-    3. 每个标题包含：[英文标题]、[中文翻译]、[推荐理由]、[组成公式]。
-    请使用 Markdown 表格形式展示。
-    """
+    if not api_key:
+        st.error("❌ 没检测到 DEEPSEEK_API_KEY，请在 Secrets 中配置")
+        return None
     
     try:
-        res = requests.post(url, json={
+        url = "https://api.deepseek.com/chat/completions"
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+        payload = {
             "model": "deepseek-chat",
-            "messages": [{"role": "user", "content": prompt}]
-        }, headers=headers)
-        return res.json()['choices'][0]['message']['content']
-    except:
-        return "❌ SEO 生成失败，请检查 API 余额或网络。"
+            "messages": [
+                {"role": "system", "content": "你是一位拥有10年经验的 TikTok Shop 饰品爆款专家，精通东南亚市场。"},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.6
+        }
+        response = requests.post(url, json=payload, headers=headers)
+        return response.json()['choices'][0]['message']['content']
+    except Exception as e:
+        st.error(f"API 异常: {str(e)}")
+        return None
 
-def generate_jewelry_image(prompt_type, context):
-    """模拟调用图像生成模型 (此处需替换为你实际接入的图片生成逻辑)"""
-    # 模拟生成进度
-    for percent in range(0, 101, 20):
-        time.sleep(0.5)
-        yield percent
-    # 这里返回占位图，实际部署时接入 Image Generation 工具
-    return "https://via.placeholder.com/1024x1024.png?text=Jewelry+AI+Generated"
-
-# --- 4. 侧边栏：输入信息 ---
+# --- 4. 侧边栏：输入区 ---
 with st.sidebar:
-    st.header("📥 商品信息输入")
-    origin_title = st.text_input("1. 原始标题", "Heart S925 Silver Necklace")
-    category = st.selectbox("2. 商品类型", ["项链", "耳环", "耳钉", "戒指", "手链", "手镯", "脚链"], index=0)
-    market = st.selectbox("3. 目标市场", ["东南亚", "美国", "马来西亚", "新加坡", "泰国", "越南", "菲律宾"], index=0)
-    age = st.slider("4. 目标人群年龄", 18, 60, (18, 35))
-    gender = st.radio("5. 目标人群性别", ["女性", "男性"], horizontal=True)
-    uploaded_files = st.file_uploader("6. 原始商品图 (支持多张)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
-
+    st.title("💎 商品配置")
+    origin_title = st.text_input("1. 原始标题", placeholder="如：925银蝴蝶项链")
+    category = st.selectbox("2. 商品类型", ["项链", "耳环", "耳钉", "戒指", "手链", "手镯", "脚链"])
+    market = st.selectbox("3. 目标市场", ["东南亚总区", "马来西亚", "新加坡", "泰国", "越南", "菲律宾", "美国"])
+    age_range = "18-35"
+    gender = st.radio("4. 目标人群性别", ["女性", "男性"], horizontal=True)
+    uploaded_files = st.file_uploader("5. 上传原始图 (支持多张)", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    
     st.divider()
-    if st.button("🔄 重置工作区"):
+    if st.button("🔄 开启新任务"):
         st.session_state.clear()
         st.rerun()
 
 # --- 5. 主界面布局 ---
-col_action, col_display = st.columns([1, 1.2])
+st.title("🛍️ TikTok Shop 饰品全能优化助手")
+st.caption("当前引擎：DeepSeek-V3 ｜ 状态：独占运行中")
 
-with col_action:
-    st.subheader("🛠️ 专家指令区")
+col_left, col_right = st.columns([1, 1.2])
+
+with col_left:
+    st.subheader("🛠️ 专家指令台")
     
     # --- 按钮 1：标题优化 ---
-    if st.button("✨ 1. 标题 SEO 优化"):
-        with st.status("🔍 正在检索全球平台热词...", expanded=True) as status:
-            st.write("正在分析 TikTok Shop 东南亚趋势...")
-            result = call_deepseek_seo({
-                "title": origin_title, "category": category, "market": market,
-                "age": f"{age[0]}-{age[1]}", "gender": gender
-            })
-            st.session_state.results["titles"] = result
-            status.update(label="✅ 标题优化完成！", state="complete")
+    if st.button("✨ 按钮：执行标题优化"):
+        with st.status("🔍 检索 TikTok/Amazon/Etsy 热词...", expanded=True) as s:
+            add_log(f"开始分析 {market} 市场的 {category} SEO...")
+            prompt = f"""
+            任务：优化{category}标题。参考平台：TikTok, Amazon, Etsy, Temu。
+            原始信息：{origin_title}，目标：{market}，人群：{age_range}岁{gender}。
+            要求：
+            1. 提供3个爆款标题（优先级排序）。
+            2. 每个标题包含：【英文标题】、【中文翻译】、【组成公式】、【推荐理由】。
+            使用 Markdown 表格输出。
+            """
+            st.session_state.data["seo"] = call_deepseek(prompt)
+            s.update(label="✅ 标题优化完成！", state="complete")
 
-    # --- 按钮 2：商品图优化 ---
-    if st.button("🖼️ 2. 商品图优化 (主图+多角度)"):
-        with st.status("🎨 正在构建莫兰迪色调布景...", expanded=True) as status:
-            st.write("预估耗时: 25秒 | 当前进度: 准备材质贴图...")
-            # 这里的 Prompt 会自动结合你要求的“背景要求”
-            time.sleep(2)
-            st.session_state.results["images"].append({"type": "主图", "url": "https://via.placeholder.com/800"})
-            st.session_state.results["images"].append({"type": "多角度图", "url": "https://via.placeholder.com/801"})
-            status.update(label="✅ 商品图生成完成！", state="complete")
+    # --- 按钮 2：商品图优化 (生成 MJ 指令) ---
+    if st.button("🖼️ 按钮：生成商品图优化建议"):
+        with st.status("🎨 正在设计莫兰迪布景方案...", expanded=True) as s:
+            add_log("构建拍摄台：45度柔光、莫兰迪色调...")
+            prompt = f"""
+            为这款{gender}{category}设计两套拍摄方案（符合莫兰迪色调、中性肤色背景）。
+            要求提供：
+            1. 【主图拍摄建议】：包含光影布局、几何道具使用、微距参数。
+            2. 【Midjourney 英文指令】：用于生成背景及氛围图。
+            """
+            st.session_state.data["visual"] = call_deepseek(prompt)
+            s.update(label="✅ 视觉方案已生成！", state="complete")
 
-    # --- 按钮 3：模特图优化 ---
-    if st.button("👤 3. 模特佩戴图优化"):
-        with st.status(f"🎭 正在匹配{gender}模特及妆造...", expanded=True) as status:
-            st.write("正在配置柔和弥散光影...")
-            time.sleep(2)
-            st.session_state.results["images"].append({"type": "模特图", "url": "https://via.placeholder.com/802"})
-            status.update(label="✅ 模特图生成完成！", state="complete")
+    # --- 按钮 3：模特图优化 (生成 MJ 指令) ---
+    if st.button("👤 按钮：生成模特佩戴建议"):
+        with st.status("🎭 正在配置模特及妆造...", expanded=True) as s:
+            add_log(f"设置{'水光肌' if gender=='女性' else '麦色皮肤'}模型参数...")
+            prompt = f"""
+            设计{gender}模特佩戴这款{category}的拍摄方案。
+            要求：
+            - 女性：水光肌、温柔背光、大面积留白。
+            - 男性：麦色皮肤、黑针织衫、侧逆光立体感。
+            返回：详细的拍摄指令及 2 组 MJ 提示词。
+            """
+            st.session_state.data["model_shot"] = call_deepseek(prompt)
+            s.update(label="✅ 模特方案已生成！", state="complete")
 
-    # --- 二次编辑功能 ---
-    if st.session_state.results["images"]:
-        st.divider()
-        st.subheader("✍️ 二次局部微调")
-        selected_img = st.selectbox("选择要修改的图片", [img['type'] for img in st.session_state.results["images"]])
-        edit_advice = st.text_area("输入修改建议", placeholder="例如：背景再暗一点，增加丝绸褶皱...")
-        if st.button("🪄 立即重新优化"):
-            st.info(f"正在基于首次生成的 {selected_img} 进行迭代...")
-
-with col_display:
-    st.subheader("📋 实时生成结果")
+with col_right:
+    st.subheader("📋 优化结果展示")
     
-    # 显示标题结果
-    if st.session_state.results["titles"]:
-        with st.expander("📝 查看优化标题方案", expanded=True):
-            st.markdown(st.session_state.results["titles"])
+    # 日志监控
+    if st.session_state.data["logs"]:
+        with st.expander("👁️ 实时进度与模型思考", expanded=False):
+            for log in st.session_state.data["logs"]:
+                st.caption(log)
 
-    # 显示图片结果
-    if st.session_state.results["images"]:
-        cols = st.columns(2)
-        for idx, img_obj in enumerate(st.session_state.results["images"]):
-            with cols[idx % 2]:
-                st.caption(f"【{img_obj['type']}】")
-                # 点击放大逻辑：使用 st.image 包装
-                st.image(img_obj['url'], use_container_width=True)
-                if st.button(f"🔍 放大预览 {idx}", key=f"zoom_{idx}"):
-                    st.session_state.enlarged_img = img_obj['url']
+    # SEO 展示
+    if st.session_state.data["seo"]:
+        st.markdown(f'<div class="result-card">{st.session_state.data["seo"]}</div>', unsafe_allow_html=True)
 
-        # ZIP 下载逻辑
+    # 视觉方案展示
+    if st.session_state.data["visual"]:
+        st.markdown(f'<div class="result-card"><b>📸 拍摄与 MJ 指令：</b><br>{st.session_state.data["visual"]}</div>', unsafe_allow_html=True)
+
+    # 模特方案展示
+    if st.session_state.data["model_shot"]:
+        st.markdown(f'<div class="result-card"><b>👤 模特佩戴方案：</b><br>{st.session_state.data["model_shot"]}</div>', unsafe_allow_html=True)
+
+    # 原图预览
+    if uploaded_files:
         st.divider()
-        zip_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}.zip"
-        st.download_button("📥 打包下载全部图片 (ZIP)", data=b"", file_name=zip_name)
+        st.caption("🖼️ 原始商品预览")
+        cols = st.columns(3)
+        for i, file in enumerate(uploaded_files):
+            cols[i % 3].image(file, use_container_width=True)
 
-# --- 6. 放大镜浮层 (简单逻辑模拟) ---
-if st.session_state.enlarged_img:
-    st.divider()
-    st.subheader("🔎 大图预览 (点击下方按钮缩小)")
-    st.image(st.session_state.enlarged_img, width=800)
-    if st.button("❌ 关闭放大"):
-        st.session_state.enlarged_img = None
-        st.rerun()
+# 页脚
+st.markdown("---")
+st.caption(f"TikTok Shop AI Expert | {datetime.now().strftime('%Y-%m-%d')}")
