@@ -1,38 +1,42 @@
 import streamlit as st
 import requests
 import re
-import time
 from PIL import Image
 
-# --- 1. 物理层彻底重置 ---
-if "v23_fix" not in st.session_state:
-    for key in list(st.session_state.keys()): del st.session_state[key]
-    st.session_state.v23_fix = True
+# --- 1. 物理层内存清理 (针对残留报错的必杀技) ---
+if "v24_ready" not in st.session_state:
+    for k in list(st.session_state.keys()): 
+        del st.session_state[k]
+    st.session_state.v24_ready = True
     st.session_state.seo_data = None
     st.session_state.img_list = []
 
-# --- 2. 符合 2026 文档规范的 AI 引擎 ---
-def call_openrouter_v23(task_type, cat, market, gender, title=""):
+# --- 2. 2026 官方标准 API 调用函数 ---
+def call_openrouter_v24(task_type, cat, mkt, gen, title=""):
     api_key = st.secrets.get("OPENROUTER_API_KEY")
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "Authorization": f"Bearer {api_key}", 
         "Content-Type": "application/json"
     }
     
-    # 根据任务调整参数
+    # 核心适配：文案用 Gemini，绘图用 2026 通用路由
     if task_type == "SEO":
+        model_id = "google/gemini-2.0-flash-001" 
         payload = {
-            "model": "deepseek/deepseek-chat",
-            "messages": [{"role": "user", "content": f"Optimize TikTok title for {gender} {cat} in {market}. Original: {title}. Output: Markdown Table."}]
+            "model": model_id,
+            "messages": [{"role": "user", "content": f"Optimize TikTok Shop title for {gen} {cat} in {mkt}. Original: {title}. Output in Markdown table."}]
         }
     else:
-        # 图片生成：必须包含 modalities 参数
-        prompt = f"Professional jewelry photography of {cat}. Morandi background, 8k." if task_type == "MAIN" else f"Photo of {gender} model wearing {cat}, 8k."
+        # 图片生成关键：必须使用官方支持的图片模型 ID
+        # 如果 openai/dall-e-3 提示无效，请尝试换成 "black-forest-labs/flux-schnell"
+        model_id = "openai/dall-e-3" 
+        prompt = f"Jewelry photography, {cat}, Morandi background, 8k" if task_type == "MAIN" else f"Model wearing {cat}, 8k"
+        
         payload = {
-            "model": "openai/dall-e-3", # 也可以换成 google/imagen-3
+            "model": model_id,
             "messages": [{"role": "user", "content": prompt}],
-            "modalities": ["image"] # 👈 这是文档要求的核心改动
+            "modalities": ["image"] # 👈 2026 文档要求的核心参数，漏了必报错
         }
 
     try:
@@ -40,53 +44,58 @@ def call_openrouter_v23(task_type, cat, market, gender, title=""):
         data = res.json()
         
         if "choices" in data:
-            message = data["choices"][0]["message"]
-            # 逻辑：如果返回的是图片数组，提取第一张
-            if "images" in message and message["images"]:
-                return message["images"][0], payload["model"] # 可能是 base64 或 URL
-            # 逻辑：如果返回的是普通文本（如 SEO）
-            return message.get("content", ""), payload["model"]
+            msg = data["choices"][0]["message"]
+            # 逻辑：优先提取 2026 标准返回的 images 数组
+            if "images" in msg and msg["images"]:
+                return msg["images"][0], model_id
+            # 逻辑：备选提取 content (文本或 URL)
+            return msg.get("content", ""), model_id
         else:
-            return f"❌ API 报错: {data.get('error', {}).get('message', '未知错误')}", "None"
+            err_msg = data.get("error", {}).get("message", "Unknown Error")
+            return f"❌ 接口报错: {err_msg}", "None"
     except Exception as e:
         return f"❌ 请求异常: {str(e)}", "None"
 
-# --- 3. 极简 UI ---
-st.set_page_config(page_title="TikTok饰品AI V23", layout="wide")
-st.title("💎 TikTok Shop 饰品 AI (文档修正版)")
+# --- 3. 极简 UI 布局 ---
+st.set_page_config(page_title="TikTok饰品AI V24", layout="wide")
+st.title("💎 TikTok Shop 饰品 AI (V24.0 官方规范版)")
+st.caption("提示：若图片模型 ID 无效，请进入代码修改 model_id 为 black-forest-labs/flux-schnell")
 
 with st.sidebar:
-    u_title = st.text_input("1. 原始标题", "心形饰品")
-    u_cat = st.selectbox("2. 商品类型", ["项链", "手链", "耳环", "戒指"])
-    u_mkt = st.selectbox("3. 目标市场", ["东南亚", "美国", "英国"])
-    u_gen = st.radio("4. 目标性别", ["女性", "男性"], horizontal=True)
+    st.header("📥 输入信息")
+    u_title = st.text_input("原始标题", "心形项链")
+    u_cat = st.selectbox("类型", ["项链", "手链", "耳环", "戒指"])
+    u_mkt = st.selectbox("市场", ["东南亚", "美国", "英国"])
+    u_gen = st.radio("性别趋势", ["女性", "男性"], horizontal=True)
     st.divider()
-    f = st.file_uploader("🖼️ 上传原图", type=["jpg", "png", "jpeg"])
+    f = st.file_uploader("参考原图", type=["jpg", "png"])
     if f: st.image(Image.open(f), use_container_width=True)
 
 c1, c2 = st.columns([1, 1.2])
+
 with c1:
-    if st.button("✨ 执行 SEO 优化"):
-        with st.status("处理中..."):
-            st.session_state.seo_data, _ = call_openrouter_v23("SEO", u_cat, u_mkt, u_gen, u_title)
+    st.subheader("🚀 指令执行")
+    if st.button("✨ 1. 优化标题"):
+        with st.status("文案模型工作中..."):
+            st.session_state.seo_data, _ = call_openrouter_v24("SEO", u_cat, u_mkt, u_gen, u_title)
             
-    if st.button("🖼️ 生成 AI 图片 (主图/模特)"):
-        with st.status("正在生成图片..."):
-            res, mod = call_openrouter_v23("MAIN", u_cat, u_mkt, u_gen)
+    if st.button("🖼️ 2. 生成商品图/模特图"):
+        with st.status("绘图模型工作中..."):
+            res, mod = call_openrouter_v24("MAIN", u_cat, u_mkt, u_gen)
             st.session_state.img_list.append({"u": res, "m": mod})
 
 with c2:
-    if st.session_state.seo_data: st.markdown(st.session_state.seo_data)
+    st.subheader("📊 成果展示")
+    if st.session_state.seo_data:
+        st.markdown(st.session_state.seo_data)
+    
     if st.session_state.img_list:
         grid = st.columns(2)
         for i, item in enumerate(st.session_state.img_list):
             with grid[i % 2]:
-                st.caption(f"📡 {item['m']}")
-                # 处理 base64 或 URL
-                img_data = item["u"]
-                if img_data.startswith("http"):
-                    st.image(img_data, use_container_width=True)
-                elif "base64" in img_data or len(img_data) > 100:
-                    st.image(img_data, use_container_width=True)
+                st.caption(f"📡 驱动: {item['m']}")
+                raw_data = str(item["u"])
+                if raw_data.startswith("http") or len(raw_data) > 100:
+                    st.image(raw_data, use_container_width=True)
                 else:
-                    st.error(f"无效内容: {img_data}")
+                    st.error(f"无法解析图片内容: {raw_data}")
