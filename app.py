@@ -2,115 +2,100 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 import time
-import io
 from datetime import datetime
 
 # --- 1. 初始状态存储 ---
 if "optimized_data" not in st.session_state:
-    st.session_state.optimized_data = {"titles": None, "img_prompts": None}
-
-# 容错处理：确保键值对存在
-for key in ["img_prompts", "titles"]:
-    if key not in st.session_state.optimized_data:
-        st.session_state.optimized_data[key] = None
+    st.session_state.optimized_data = {"titles": None, "img_prompts": None, "active_model": "尚未调用"}
 
 # --- 2. 页面 UI 配置 ---
 st.set_page_config(page_title="TikTok Shop 饰品 AI 专家", layout="wide")
 st.title("💎 TikTok Shop 饰品全能优化助手")
-st.caption("基于你的可用模型列表定制 - 稳定版")
+st.info(f"🤖 当前工作模型：{st.session_state.optimized_data.get('active_model', '等待指令')}")
 
-# --- 3. API 配置 (严格匹配你的列表) ---
+# --- 3. API 配置 ---
 try:
     if "GOOGLE_API_KEY" not in st.secrets:
-        st.error("❌ 请先在 Streamlit Secrets 中配置 GOOGLE_API_KEY")
+        st.error("❌ 未找到 API KEY，请在 Secrets 中配置。")
         st.stop()
-        
     genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
-    
-    # 严格匹配你列表中的第 14 项: models/gemini-flash-latest
-    # 如果这个还报 429，建议切换到第 15 项: gemini-flash-lite-latest
-    MODEL_NAME = 'gemini-flash-latest' 
-    model = genai.GenerativeModel(MODEL_NAME)
-    
 except Exception as e:
-    st.error(f"⚠️ API 配置失败: {str(e)}")
+    st.error(f"配置错误: {e}")
     st.stop()
 
-# --- 4. 侧边栏 ---
-with st.sidebar:
-    st.header("📥 输入商品信息")
-    origin_title = st.text_input("1. 原始标题", "心形 925 银项链")
-    category = st.selectbox("2. 商品类型", ["项链", "耳环", "耳钉", "戒指", "手链", "手镯", "脚链"])
-    market = st.selectbox("3. 目标市场", ["东南亚", "美国", "马来西亚", "新加坡", "泰国", "越南", "菲律宾"])
-    gender = st.radio("4. 目标人群性别", ["女性", "男性"])
-    uploaded_files = st.file_uploader("5. 上传商品原图", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
-    st.divider()
-    show_debug = st.checkbox("🐞 查看当前可用模型列表")
+# --- 4. 定义模型推荐优先级梯队 (严格匹配你的可用列表) ---
+# 优先级说明：Flash(快) -> Pro(强) -> Lite(稳/高配额)
+MODEL_HIERARCHY = [
+    'gemini-flash-latest',       # 1. 综合最优
+    'gemini-2.0-flash-001',     # 2. 备选新版
+    'gemini-flash-lite-latest',  # 3. 最终保底（Lite版最不容易报429）
+    'gemini-3-flash-preview'     # 4. 预览版尝试
+]
 
-# --- 5. 核心逻辑：带重试机制的请求 ---
-def generate_with_retry(content, max_retries=3):
-    for i in range(max_retries):
+# --- 5. 自动切换逻辑函数 ---
+def try_generate_content(content):
+    last_error = ""
+    # 按照优先级依次尝试每个模型
+    for model_name in MODEL_HIERARCHY:
         try:
-            return model.generate_content(content)
+            with st.spinner(f"正在尝试使用模型: {model_name}..."):
+                current_model = genai.GenerativeModel(model_name)
+                response = current_model.generate_content(content)
+                # 如果成功，记录当前使用的模型并返回结果
+                st.session_state.optimized_data["active_model"] = model_name
+                return response
         except Exception as e:
-            if "429" in str(e) and i < max_retries - 1:
-                time.sleep(2) # 遇到 429 稍微等一下再试
+            last_error = str(e)
+            if "429" in last_error:
+                st.warning(f"⚠️ {model_name} 配额已满，正在自动切换下一模型...")
+                time.sleep(1) # 短暂冷却
                 continue
             else:
-                raise e
+                st.warning(f"❌ {model_name} 报错: {last_error[:50]}... 尝试切换...")
+                continue
+    
+    # 如果所有模型都失败了
+    raise Exception(f"所有模型均尝试失败。最后一次报错: {last_error}")
 
-# --- 6. 主界面 ---
-col_output, col_preview = st.columns([1.5, 1])
-
-with col_output:
-    if st.button("✨ 1. 标题优化 (SEO)"):
-        if not origin_title:
-            st.warning("请输入标题")
-        else:
-            with st.status("正在分析 (模型: gemini-flash)...", expanded=True) as status:
-                prompt = f"针对 {market} 18-35 岁 {gender}，优化 {category} 标题: '{origin_title}'。给出推荐理由和中文翻译。"
-                content = [prompt]
-                if uploaded_files:
-                    content.append(Image.open(uploaded_files[0]))
-                
-                try:
-                    response = generate_with_retry(content)
-                    st.session_state.optimized_data["titles"] = response.text
-                    status.update(label="完成！", state="complete")
-                except Exception as e:
-                    st.error(f"生成失败 (可能是额度超限): {str(e)}")
-
-    if st.session_state.optimized_data.get("titles"):
-        st.markdown(st.session_state.optimized_data["titles"])
-
+# --- 6. 侧边栏与主界面 ---
+with st.sidebar:
+    st.header("📥 商品输入")
+    origin_title = st.text_input("原始标题", "心形 925 银项链")
+    category = st.selectbox("商品类型", ["项链", "耳环", "戒指", "手链"])
+    uploaded_files = st.file_uploader("上传原图", type=["jpg", "png", "jpeg"])
     st.divider()
+    if st.button("🔄 重置会话"):
+        st.session_state.optimized_data = {"titles": None, "img_prompts": None, "active_model": "尚未调用"}
+        st.rerun()
 
-    if st.button("📸 2. 生成视觉优化指令"):
-        with st.status("正在思考方案...", expanded=True) as status:
-            v_prompt = f"为 {gender} 佩戴的 {category} 设计 AI 绘图提示词。背景要求: 莫兰迪色、哑光质感。模特要求: 水光肌、高质感。"
+col_left, col_right = st.columns([1.5, 1])
+
+with col_left:
+    if st.button("✨ 执行全能优化"):
+        if not origin_title:
+            st.error("请先输入标题")
+        else:
+            # 构造 Prompt
+            prompt = f"针对东南亚市场，优化{category}标题: '{origin_title}'。请结合热搜词提供3个建议和中文翻译。"
+            input_data = [prompt]
+            if uploaded_files:
+                input_data.append(Image.open(uploaded_files))
+            
             try:
-                response = generate_with_retry(v_prompt)
-                st.session_state.optimized_data["img_prompts"] = response.text
-                status.update(label="完成！", state="complete")
-            except Exception as e:
-                st.error(f"失败: {str(e)}")
+                res = try_generate_content(input_data)
+                st.session_state.optimized_data["titles"] = res.text
+                st.success(f"✅ 调用成功！当前模型: {st.session_state.optimized_data['active_model']}")
+            except Exception as final_e:
+                st.error(f"🚨 最终失败: {final_e}")
 
-    if st.session_state.optimized_data.get("img_prompts"):
-        st.write(st.session_state.optimized_data["img_prompts"])
+    if st.session_state.optimized_data["titles"]:
+        st.markdown("### 📝 优化方案")
+        st.write(st.session_state.optimized_data["titles"])
 
-with col_preview:
+with col_right:
     st.subheader("🖼️ 图片预览")
     if uploaded_files:
-        for i, file in enumerate(uploaded_files):
-            st.image(Image.open(file), caption=f"原图 {i+1}", width="stretch")
-    
-    if st.session_state.optimized_data.get("titles"):
-        st.download_button("📥 下载结果", st.session_state.optimized_data["titles"], f"SEO_{datetime.now().strftime('%H%M%S')}.txt")
+        st.image(uploaded_files, width="stretch")
 
-# --- 7. 调试模式 ---
-if show_debug:
-    try:
-        models = [m.name for m in genai.list_models()]
-        st.json(models)
-    except:
-        st.write("无法获取列表")
+# 样式
+st.markdown("<style>.stButton>button { width: 100%; border-radius: 8px; }</style>", unsafe_allow_html=True)
