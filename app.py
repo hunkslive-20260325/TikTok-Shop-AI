@@ -1,118 +1,136 @@
 import streamlit as st
 import requests
-import json
-from datetime import datetime
+import re
 
-# --- 1. 页面配置 ---
-st.set_page_config(page_title="TikTok Shop 饰品 AI 专家", layout="wide", page_icon="💎")
+# --- 1. 界面与样式配置 ---
+st.set_page_config(page_title="TikTok 饰品 AI 专家 (全模型自由版)", layout="wide")
 
-# 自定义样式
 st.markdown("""
     <style>
-    .stButton>button { width: 100%; border-radius: 10px; height: 3em; font-weight: bold; background: #2b2b2b; color: white; }
-    .stButton>button:hover { background: #ff4b4b; border: none; }
-    .res-box { padding: 20px; border-radius: 12px; background: #f9f9f9; border: 1px solid #eee; margin-bottom: 20px; }
+    .model-card {
+        background-color: #f8f9fa;
+        border-left: 5px solid #2e7d32;
+        padding: 10px 15px;
+        margin-bottom: 15px;
+        border-radius: 4px;
+    }
+    .stButton>button { border-radius: 10px; background: #2b2b2b; color: white; font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
-# --- 2. 核心请求逻辑 (OpenRouter 专用) ---
-def call_ai(prompt, model_id):
-    api_key = st.secrets.get("OPENROUTER_API_KEY")
+# --- 2. 核心请求引擎 ---
+def call_openrouter(prompt, model_id):
+    api_key = st.secrets["OPENROUTER_API_KEY"]
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://github.com/hunkslive", # 建议填写你的项目地址
+        "HTTP-Referer": "http://localhost:8501", # OpenRouter 要求的来源标识
     }
+    
     payload = {
         "model": model_id,
         "messages": [{"role": "user", "content": prompt}]
     }
+    
     try:
         res = requests.post(url, headers=headers, json=payload, timeout=60)
         data = res.json()
         if "choices" in data:
             return data["choices"][0]["message"]["content"]
         else:
-            # 捕获具体的错误信息提示给用户
-            err_msg = data.get("error", {}).get("message", "未知错误")
-            return f"❌ 模型调用失败: {err_msg}"
+            error_msg = data.get("error", {}).get("message", "未知模型错误")
+            return f"❌ 调用失败: {error_msg}"
     except Exception as e:
         return f"❌ 网络请求异常: {str(e)}"
 
-# --- 3. 侧边栏：输入面板 ---
+# --- 3. 侧边栏：灵活的模型配置 ---
 with st.sidebar:
-    st.header("📥 商品输入")
-    u_title = st.text_input("原始标题", "Elegant Silver Necklace")
-    u_cat = st.selectbox("商品类型", ["项链", "耳环", "戒指", "手链", "脚链"])
-    u_market = st.selectbox("目标市场", ["东南亚总区", "马来西亚", "美国", "新加坡"])
-    u_gender = st.radio("受众性别", ["女性", "男性"], horizontal=True)
-    u_files = st.file_uploader("上传参考图", type=["jpg", "png", "jpeg"])
+    st.header("⚙️ 模型配置中心")
     
+    # 文案模型选择
+    st.subheader("📝 文案引擎")
+    text_mode = st.toggle("手动输入文案模型 ID", False)
+    if text_mode:
+        text_model = st.text_input("输入 OpenRouter 模型 ID", "deepseek/deepseek-chat")
+    else:
+        text_model = st.selectbox("选择推荐模型", [
+            "deepseek/deepseek-chat", # ⭐ 推荐
+            "google/gemini-2.0-flash-exp:free",
+            "anthropic/claude-3-haiku",
+            "meta-llama/llama-3.1-405b"
+        ], format_func=lambda x: f"⭐ {x}" if "deepseek" in x else x)
+
     st.divider()
-    if st.button("🔄 重置会话"):
-        st.session_state.clear()
-        st.rerun()
+
+    # 绘画模型选择
+    st.subheader("🎨 绘画引擎")
+    img_mode = st.toggle("手动输入绘画模型 ID", False)
+    if img_mode:
+        image_model = st.text_input("输入绘画模型 ID", "openai/dall-e-3")
+    else:
+        image_model = st.selectbox("选择推荐模型", [
+            "openai/dall-e-3", # ⭐ 推荐
+            "black-forest-labs/flux-schnell",
+            "google/gemini-pro-vision",
+            "midjourney/midjourney"
+        ], format_func=lambda x: f"⭐ {x}" if "dall-e-3" in x else x)
+
+    st.divider()
+    u_title = st.text_input("原始产品标题", "Heart S925 Necklace")
+    u_cat = st.selectbox("产品品类", ["项链", "耳环", "戒指", "手链"])
 
 # --- 4. 主界面布局 ---
-st.title("💎 TikTok Shop 饰品全能 AI 专家")
-st.caption("当前引擎：OpenRouter (DeepSeek + Gemini/DALL-E 混合驱动)")
+st.title("💎 TikTok Shop 饰品全能优化")
 
 col_left, col_right = st.columns([1, 1.2])
 
 with col_left:
-    st.subheader("🛠️ 专家指令执行")
+    st.subheader("🚀 指令台")
     
-    # --- 按钮 1：SEO 优化 ---
-    if st.button("✨ 执行：标题 SEO 优化"):
-        with st.status("🔍 正在分析 TikTok 热搜词...", expanded=True):
-            prompt = f"作为TikTok电商专家，为{u_market}市场的{u_cat}优化标题。原始标题：{u_title}。请返回3个高权重SEO标题，包含组成公式、推荐理由和中文翻译。请用Markdown表格展示。"
-            # 文本任务使用 DeepSeek 或 Gemini
-            st.session_state.seo_res = call_ai(prompt, "google/gemini-2.0-flash-exp:free")
+    # SEO 逻辑
+    if st.button("✨ 生成爆款标题"):
+        with st.spinner(f"正在调动 {text_model}..."):
+            prompt = f"作为 TikTok 电商专家，请为这款{u_cat}生成 3 个高转化标题。原始标题：{u_title}。要求：符合东南亚审美，展示搜索词分析。请用 Markdown 表格。 "
+            st.session_state.seo_res = call_openrouter(prompt, text_model)
+            st.session_state.last_text_model = text_model
 
-    # --- 按钮 2：视觉方案与出图 ---
-    if st.button("🖼️ 执行：生成莫兰迪优化图"):
-        with st.status("🎨 正在调配莫兰迪色调与光影...", expanded=True):
-            # 这里是核心：直接要求生成具有莫兰迪美感的专业摄影描述及指令
-            img_prompt = f"""
-            Task: Provide a professional jewelry photography result for a {u_cat}.
-            Style Requirements: 
-            1. Background: Warm Morandi cream/beige tones, matte texture.
-            2. Lighting: 45-degree soft lighting, subtle cinematic shadows.
-            3. Model/Prop: {u_gender} model if applicable, skin should be 'glass skin' effect.
-            Output: A high-resolution image URL or a highly detailed Midjourney v6 prompt.
-            """
-            # 优先尝试 DALL-E 3，如果余额不足可换成 google/gemini-pro-vision
-            st.session_state.img_res = call_ai(img_prompt, "openai/dall-e-3")
+    # 绘图逻辑
+    if st.button("🖼️ 生成莫兰迪展示图"):
+        with st.spinner(f"正在调动 {image_model}..."):
+            prompt = f"Jewelry advertising photography, {u_cat} on a premium Morandi cream background, elegant shadows, 8k resolution, cinematic lighting. Direct image URL only."
+            st.session_state.img_res = call_openrouter(prompt, image_model)
+            st.session_state.last_img_model = image_model
 
 with col_right:
-    st.subheader("📋 实时生成结果")
-    
-    # 展示标题优化结果
+    st.subheader("📊 实时成果")
+
+    # 显示文案结果
     if "seo_res" in st.session_state:
-        st.markdown('<div class="res-box">', unsafe_allow_html=True)
-        st.markdown("### ✍️ 爆款标题建议")
-        st.write(st.session_state.seo_res)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f"""
+            <div class="model-card">
+                <small>📡 最终驱动模型：</small><br>
+                <strong>{st.session_state.last_text_model}</strong>
+            </div>
+        """, unsafe_allow_html=True)
+        st.markdown(st.session_state.seo_res)
 
-    # 展示图片/视觉方案结果
+    # 显示绘画结果
     if "img_res" in st.session_state:
-        st.markdown('<div class="res-box">', unsafe_allow_html=True)
-        st.markdown("### 📸 视觉优化方案")
-        # 逻辑判断：如果返回的是图片链接则显示图片，否则显示文字
-        if "http" in st.session_state.img_res and ".png" in st.session_state.img_res:
-            st.image(st.session_state.img_res, caption="✅ AI 实时生成的莫兰迪大片")
-        else:
-            st.info("💡 视觉指令已生成：")
-            st.write(st.session_state.img_res)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-    # 原始图片预览
-    if u_files:
         st.divider()
-        st.caption("🖼️ 待优化原图预览")
-        st.image(u_files, width=200)
+        st.markdown(f"""
+            <div class="model-card" style="border-left-color: #f57c00;">
+                <small>🎨 最终驱动模型：</small><br>
+                <strong>{st.session_state.last_img_model}</strong>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        # 提取 URL
+        raw_output = st.session_state.img_res
+        urls = re.findall(r'(https?://[^\s)"]+)', raw_output)
+        if urls:
+            st.image(urls[0], caption=f"基于 {st.session_state.last_img_model} 的莫兰迪优化方案")
+        else:
+            st.info(raw_output)
 
-# 页脚
-st.markdown("---")
-st.caption(f"TikTok Shop AI Expert | Power by OpenRouter | {datetime.now().strftime('%Y-%m-%d')}")
+st.sidebar.caption("TikTok Shop AI Expert | Powered by OpenRouter | 2026")
