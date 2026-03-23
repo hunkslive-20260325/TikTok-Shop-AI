@@ -3,7 +3,6 @@ import requests
 import base64
 from PIL import Image
 from io import BytesIO
-from googletrans import Translator  # pip install googletrans==4.0.0-rc1
 
 # ==========================================
 # 🛡️ 模型库（按性价比排序）
@@ -36,6 +35,28 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": "请求失败"}
 
 # ==========================================
+# 🌐 在线 Google 翻译接口
+# ==========================================
+def translate_text(text, target_lang='zh-CN'):
+    """
+    使用 Google Translate 网页接口翻译
+    """
+    try:
+        url = "https://translate.googleapis.com/translate_a/single"
+        params = {
+            "client": "gtx",
+            "sl": "auto",
+            "tl": target_lang,
+            "dt": "t",
+            "q": text
+        }
+        res = requests.get(url, params=params, timeout=10)
+        res.raise_for_status()
+        return ''.join([item[0] for item in res.json()[0]])
+    except:
+        return text  # 翻译失败返回原文
+
+# ==========================================
 # 💎 AI 核心引擎
 # ==========================================
 class JewelryAIEngineV48:
@@ -46,7 +67,6 @@ class JewelryAIEngineV48:
             "HTTP-Referer": "https://streamlit.io",
             "X-Title": "Jewelry_V48"
         }
-        self.translator = Translator()
 
     # 生成图片
     def run_smart_gen(self, mid_key, p_type, cat, market, gen, file):
@@ -92,8 +112,8 @@ class JewelryAIEngineV48:
                 timeout=60
             )
             content = res_json.get('choices', [{}])[0].get('message', {}).get('content', f"{u_title} {rank+1}")
-            # 翻译成中文
-            translation = self.translator.translate(content, dest='zh-cn').text
+            # 使用在线翻译
+            translation = translate_text(content)
             titles.append((content, translation))
         return titles
 
@@ -153,10 +173,10 @@ if st.session_state.seo_titles:
 if btn_prod and u_file:
     img = engine.run_smart_gen(m_img, "product", u_cat, u_market, u_gender, u_file)
     if img:
-        st.image(img["url"] if isinstance(img, dict) else Image.open(BytesIO(base64.b64decode(img.split(',')[1]))), use_column_width=True)
+        display_image(img)
 
 # --- 模特图 ---
 if btn_mod and u_file:
     img = engine.run_smart_gen(m_img, "model", u_cat, u_market, u_gender, u_file)
     if img:
-        st.image(img["url"] if isinstance(img, dict) else Image.open(BytesIO(base64.b64decode(img.split(',')[1]))), use_column_width=True)
+        display_image(img)
