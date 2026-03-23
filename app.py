@@ -34,23 +34,6 @@ def safe_post(url, headers, json_data, timeout=60):
     except:
         return {"error": "请求失败"}
 
-# 在线 Google 翻译
-def translate_text(text, target_lang='zh-CN'):
-    try:
-        url = "https://translate.googleapis.com/translate_a/single"
-        params = {
-            "client": "gtx",
-            "sl": "auto",
-            "tl": target_lang,
-            "dt": "t",
-            "q": text
-        }
-        res = requests.get(url, params=params, timeout=10)
-        res.raise_for_status()
-        return ''.join([item[0] for item in res.json()[0]])
-    except:
-        return text
-
 # 显示图片
 def display_image(data):
     if isinstance(data, dict) and "url" in data:
@@ -72,7 +55,7 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    # 生成图片
+    # 图片生成
     def run_smart_gen(self, mid_key, p_type, cat, market, gen, file):
         mid = ALL_DRAWING_MODELS.get(mid_key)
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
@@ -103,7 +86,7 @@ class JewelryAIEngineV48:
         img_list = msg.get('images', [])
         return img_list[0] if img_list else None
 
-    # 生成三条推荐标题
+    # 标题生成
     def run_seo(self, model_id, u_title, u_market, progress_callback=None):
         seo_prompt = f"""
 针对 {u_market} 市场优化标题 '{u_title}'，参考 TikTok 和 Amazon 热搜词。
@@ -164,37 +147,52 @@ btn_seo = c1.button("✨ 生成标题")
 btn_prod = c2.button("🖼️ 生成商品图")
 btn_mod = c3.button("👤 生成模特图")
 
-# 进度显示
+# --- 进度显示 ---
 progress_text = st.empty()
 progress_bar = st.progress(0)
 def progress_callback(current,total,msg):
     progress_text.text(f"{msg} ({current}/{total}) - {datetime.now().strftime('%H:%M:%S')}")
     progress_bar.progress(current/total)
 
-# --- SEO ---
+# --- 生成标题 ---
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(m_txt, u_title, u_market, progress_callback)
+    st.session_state.seo_result = engine.run_seo(m_txt,u_title,u_market,progress_callback)
     progress_text.text("✅ 标题生成完成")
     progress_bar.empty()
 
-# 显示三条标题，绿色渐变+一键复制
+# --- 显示标题（美化+复制） ---
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
-    matches = re.findall(pattern, st.session_state.seo_result, re.DOTALL)
-    if matches:
-        colors = ["#b7e4c7","#d8f3dc","#edf7ed"]
-        for idx,(title,cn,reason) in enumerate(matches):
-            color = colors[idx] if idx < len(colors) else "#edf7ed"
-            st.markdown(
-                f"""
-                <div style="background-color:{color}; padding:15px; border-radius:10px; margin-bottom:10px">
-                <b>推荐标题 {idx+1}:</b> {title}<br>
-                <b>中文翻译:</b> {cn}<br>
-                <b>推荐理由:</b> {reason}<br>
+    matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
+    if len(matches) < 3:
+        st.warning("⚠️ 模型返回标题不足三条，请重新生成")
+    colors = ["#1b5e20","#2e7d32","#4caf50"]  # 深绿→中绿→浅绿
+    for idx,(title,cn,reason) in enumerate(matches[:3]):
+        color = colors[idx] if idx < len(colors) else "#4caf50"
+        st.markdown(
+            f"""
+            <div style="
+                background-color:{color};
+                padding:20px;
+                border-radius:12px;
+                margin-bottom:12px;
+                box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
+                color:#ffffff;
+                font-weight:bold;
+            ">
+                <div style="font-size:18px; margin-bottom:8px;">推荐标题 {idx+1}:</div>
+                <div style="font-size:20px; margin-bottom:5px;">{title}</div>
+                <button onclick="navigator.clipboard.writeText('{title}')"
+                        style='padding:5px 10px; margin-top:5px; border:none; border-radius:5px; background-color:#ffffff; color:{color}; cursor:pointer; font-weight:bold;'>
+                    复制标题
+                </button>
+                <div style="margin-top:10px; font-size:14px; font-weight:normal; color:#f0f0f0;">
+                    中文翻译: {cn}<br>
+                    推荐理由: {reason}
                 </div>
-                """,unsafe_allow_html=True
-            )
-            st.code(f"{title}\n{cn}\n{reason}",language="")
+            </div>
+            """, unsafe_allow_html=True
+        )
 
 # --- 商品图 ---
 if btn_prod and u_file:
