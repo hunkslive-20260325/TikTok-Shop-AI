@@ -37,18 +37,33 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": str(e)}
 
 # ------------------------------------------
-# 显示图片
+# 显示图片（支持 base64）- 新版本
 # ------------------------------------------
 def display_image(data):
-    if isinstance(data, dict) and "url" in data:
-        st.image(data["url"], use_column_width=True)
-    elif isinstance(data, str):
-        try:
+    """
+    显示图片，支持：
+    - URL (dict 包含 url)
+    - data:image/base64
+    - 纯 base64 字符串
+    """
+    try:
+        if isinstance(data, dict) and "url" in data:
+            st.image(data["url"], use_column_width=True)
+        elif isinstance(data, str):
             if data.startswith("data:image"):
-                data = data.split(",")[1]
-            st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
-        except Exception as e:
-            st.error(f"图片解析失败: {e}")
+                header, data = data.split(",", 1)
+            img_bytes = base64.b64decode(data)
+            image = Image.open(BytesIO(img_bytes))
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+            st.image(image, use_column_width=True)
+        else:
+            st.error("图片数据格式不支持")
+    except Exception as e:
+        st.error(f"图片解析失败: {e}")
+        if isinstance(data, str):
+            st.text(f"Base64 前100字符: {data[:100]}")
+        else:
             st.json(data)
 
 # ==========================================
@@ -63,7 +78,6 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    # 商品/模特图生成
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
         mid = ALL_DRAWING_MODELS.get(mid_key)
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
@@ -91,9 +105,8 @@ class JewelryAIEngineV48:
         choices = res_json.get('choices', [{}])
         msg = choices[0].get('message', {})
         img_list = msg.get('images', [])
-        return img_list[0] if img_list else res_json  # 返回调试信息
+        return img_list[0] if img_list else res_json
 
-    # 标题生成
     def run_seo(self, model_id, title, market, gender, category):
         seo_prompt = f"""
 请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按点击率和浏览量综合排序。
@@ -115,7 +128,7 @@ class JewelryAIEngineV48:
             timeout=60
         )
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        return content.strip() if content else res_json  # 返回调试信息
+        return content.strip() if content else res_json
 
 # ==========================================
 # Streamlit UI
@@ -123,14 +136,11 @@ class JewelryAIEngineV48:
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
 engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
 
-# session_state
 for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
-# ------------------------------------------
 # Sidebar 输入
-# ------------------------------------------
 with st.sidebar:
     st.subheader("💎 AM JEWELRY")
     u_title = st.text_input("原始标题", "心形项链")
@@ -138,8 +148,6 @@ with st.sidebar:
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"], index=0)
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
-
-    # 新增两个选择框
     u_text_model = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
     u_image_model = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=0)
 
@@ -151,16 +159,14 @@ with st.sidebar:
         st.session_state.m_img = None
         st.experimental_rerun()
 
-# ------------------------------------------
 # 主区
-# ------------------------------------------
 st.title("💎 TikTok Shop 饰品生成 V48")
 c1, c2, c3 = st.columns(3)
 btn_seo = c1.button("✨ 生成标题")
 btn_prod = c2.button("🖼️ 生成商品图")
 btn_mod = c3.button("👤 生成模特图")
 
-# --- 生成标题 ---
+# 生成标题
 if btn_seo:
     log_area = st.empty()
     log_area.info("⏳ 标题生成中...")
@@ -181,7 +187,7 @@ if btn_seo:
     except Exception as e:
         log_area.error(f"生成标题时发生错误: {e}")
 
-# --- 生成商品图/模特图 ---
+# 生成商品图 / 模特图
 if (btn_prod or btn_mod) and u_file:
     log_area = st.empty()
     try:
@@ -235,9 +241,11 @@ with tab_model:
 if st.session_state.seo_result and isinstance(st.session_state.seo_result, str):
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result + "\n", re.DOTALL)
-    colors = ["linear-gradient(90deg, #f0a500, #f4c542)", 
-              "linear-gradient(90deg, #f4c542, #fde8a9)", 
-              "linear-gradient(90deg, #fde8a9, #fff4cc)"]
+    colors = [
+        "linear-gradient(90deg, #f0a500, #f4c542)", 
+        "linear-gradient(90deg, #f4c542, #fde8a9)", 
+        "linear-gradient(90deg, #fde8a9, #fff4cc)"
+    ]
     
     st.subheader("✨ 优化标题")
     for idx, (title, cn, reason) in enumerate(matches[:3]):
