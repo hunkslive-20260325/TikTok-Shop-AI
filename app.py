@@ -5,6 +5,7 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 import re
+from streamlit_clipboard import clipboard  # pip install streamlit-clipboard
 
 # ==========================================
 # 模型库
@@ -160,7 +161,7 @@ if btn_seo:
     progress_text.text("✅ 标题生成完成")
     progress_bar.empty()
 
-# --- 显示标题（美化+复制图标） ---
+# --- 显示标题（美观+复制图标） ---
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
@@ -169,31 +170,29 @@ if st.session_state.seo_result:
     colors = ["#1b5e20","#2e7d32","#4caf50"]  # 深绿→浅绿
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#4caf50"
-        st.markdown(
-            f"""
-            <div style="
-                background-color:{color};
-                padding:15px;
-                border-radius:12px;
-                margin-bottom:10px;
-                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
-                display:flex;
-                justify-content:space-between;
-                align-items:center;
-            ">
-                <div style="color:white; font-size:18px; font-weight:bold;">{title}</div>
-                <div>
-                    <button onclick="navigator.clipboard.writeText('{title}')"
-                            title="复制标题"
-                            style='cursor:pointer; font-size:18px; border:none; background:none; color:white;'>📋</button>
+        col1, col2 = st.columns([0.95,0.05])
+        with col1:
+            st.markdown(
+                f"""
+                <div style="
+                    background-color:{color};
+                    padding:15px;
+                    border-radius:12px;
+                    margin-bottom:10px;
+                    box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
+                ">
+                    <div style="color:white; font-size:18px; font-weight:bold;">{title}</div>
+                    <div style="margin-top:5px; color:#f0f0f0; font-size:14px;">
+                        中文翻译: {cn}<br>
+                        推荐理由: {reason}
+                    </div>
                 </div>
-            </div>
-            <div style="margin-bottom:15px; color:#f0f0f0; font-size:14px;">
-                中文翻译: {cn}<br>
-                推荐理由: {reason}
-            </div>
-            """, unsafe_allow_html=True
-        )
+                """, unsafe_allow_html=True
+            )
+        with col2:
+            # 复制按钮图标
+            if clipboard(title, "📋"):
+                st.success("标题已复制到剪贴板！")
 
 # --- 商品图 ---
 if btn_prod and u_file:
