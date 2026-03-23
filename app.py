@@ -50,7 +50,7 @@ def display_image(data):
             st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
     except Exception as e:
         st.error(f"图片解析失败: {e}")
-        st.write("原始数据:", str(data)[:500])
+        st.write("原始数据前1000字符:", str(data)[:1000])
 
 # ==========================================
 # AI 引擎
@@ -64,7 +64,6 @@ class JewelryAIEngine:
             "X-Title": "Jewelry_V48"
         }
 
-    # 商品/模特图生成
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
         mid = ALL_DRAWING_MODELS.get(mid_key)
         if not file:
@@ -73,9 +72,9 @@ class JewelryAIEngine:
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
         if log_area: log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
 
-        # 初步生成请求
+        # 初步生成
         v_payload = {
-            "model": "google/gemini-3.1-flash-image-preview",
+            "model": mid,
             "messages": [
                 {"role": "user", "content": [
                     {"type": "text", "text": f"生成 {p_type} 图，标题：{title}，饰品类型：{category}，目标人群：{gender}"},
@@ -84,45 +83,47 @@ class JewelryAIEngine:
             ]
         }
         v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
-        if log_area: log_area.info(f"{p_type} 初步生成返回 (前1000字符): {str(v_res_json)[:1000]}")
+        if log_area: log_area.info(f"{p_type} 初步生成完整返回:\n{v_res_json}")
 
-        # 最终生成请求
+        # 最终生成
+        final_prompt = f"{p_type} photography. 高端饰品风格, 背景和道具符合要求。"
         res_payload = {
             "model": mid,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": f"{p_type} photography. 高端饰品风格, 背景和道具符合要求。"}]}],
+            "messages": [{"role": "user", "content": [{"type": "text", "text": final_prompt}]}],
             "modalities": ["image"]
         }
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
-        if log_area: log_area.info(f"{p_type} 最终返回 JSON (前500字符): {str(res_json)[:500]}")
+        if log_area: log_area.info(f"{p_type} 最终生成完整返回:\n{res_json}")
 
-        # 尝试提取图片
         result = None
-        if isinstance(res_json, dict):
-            choices = res_json.get('choices', [{}])
-            msg = choices[0].get('message', {})
-            img_list = msg.get('images', [])
-            if img_list:
-                result = img_list[0]
-            else:
-                content = msg.get('content', "")
-                if content.startswith("data:image"):
-                    result = content
+        try:
+            if isinstance(res_json, dict):
+                choices = res_json.get('choices', [{}])
+                msg = choices[0].get('message', {})
+                img_list = msg.get('images', [])
+                if img_list:
+                    result = img_list[0]
                 else:
-                    if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:1000]}")
-        elif isinstance(res_json, list) and len(res_json) > 1:
-            choices = res_json[1].get('choices', [{}])
-            msg = choices[0].get('message', {})
-            content = msg.get('content', "")
-            if content.startswith("data:image"):
-                result = content
-            else:
-                if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:1000]}")
+                    content = msg.get('content', "")
+                    if content and content.startswith("data:image"):
+                        result = content
+                    elif log_area:
+                        log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:500]}")
+            elif isinstance(res_json, list) and len(res_json) > 1:
+                choices = res_json[1].get('choices', [{}])
+                msg = choices[0].get('message', {})
+                content = msg.get('content', "")
+                if content and content.startswith("data:image"):
+                    result = content
+                elif log_area:
+                    log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:500]}")
+        except Exception as e:
+            if log_area: log_area.error(f"{p_type} 提取图片异常: {e}\n返回内容: {res_json}")
 
         if result and log_area: log_area.success(f"{p_type} 生成成功，数据类型: {type(result)}")
-        elif log_area: log_area.error(f"{p_type} 生成失败，未获取到图片")
+        elif log_area: log_area.error(f"{p_type} 生成失败，未获取到图片，完整返回内容:\n{res_json}")
         return result
 
-    # 标题生成
     def run_seo(self, model_id, title, market, gender, category, log_area=None):
         if log_area: log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
         seo_prompt = f"""
@@ -144,7 +145,7 @@ class JewelryAIEngine:
             {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
             timeout=60
         )
-        if log_area: log_area.info(f"标题生成返回 (前500字符): {str(res_json)[:500]}")
+        if log_area: log_area.info(f"标题生成返回完整 JSON:\n{res_json}")
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
         if content and log_area: log_area.success("✅ 标题生成完成")
         elif log_area: log_area.error("❌ 标题生成失败")
@@ -186,17 +187,23 @@ btn_seo = c1.button("✨ 生成标题")
 btn_prod = c2.button("🖼️ 生成商品图")
 btn_mod = c3.button("👤 生成模特图")
 
-# 日志区域
-log_area = st.empty()
-
-# 生成标题
+# --- 生成标题 ---
+tab_seo_area = st.empty()
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(seo_model, u_title, u_market, u_gender, u_category, log_area=log_area)
+    log_area = tab_seo_area
+    st.session_state.seo_result = engine.run_seo(
+        model_id=seo_model,
+        title=u_title,
+        market=u_market,
+        gender=u_gender,
+        category=u_category,
+        log_area=log_area
+    )
 
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
-    colors = ["#f0a500","#f4c542","#fde8a9"]
+    colors = ["#f0a500","#f4c542","#fde8a9"]  # 暖色调渐变
     st.subheader("优化标题")
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#fde8a9"
@@ -218,17 +225,18 @@ if st.session_state.seo_result:
             """, unsafe_allow_html=True
         )
 
-# 生成图片
+# --- 生成商品图/模特图 ---
+tab_img_area = st.empty()
 if (btn_prod or btn_mod) and u_file:
-    p_img = m_img_res = None
+    log_area = tab_img_area
     if btn_prod:
-        p_img = engine.run_smart_gen(img_model,"商品图", u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
+        p_img = engine.run_smart_gen(img_model,"商品图",u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
         st.session_state.p_img = p_img
     if btn_mod:
-        m_img_res = engine.run_smart_gen(img_model,"模特图", u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
+        m_img_res = engine.run_smart_gen(img_model,"模特图",u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
         st.session_state.m_img = m_img_res
 
-# Tabs显示图片
+# --- Tabs 显示图片 ---
 if st.session_state.p_img or st.session_state.m_img:
     tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
     with tab_prod:
