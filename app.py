@@ -160,36 +160,37 @@ if btn_seo:
     progress_text.text("✅ 标题生成完成")
     progress_bar.empty()
 
-# --- 显示标题（美化+复制） ---
+# --- 显示标题（美化+复制图标） ---
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
     if len(matches) < 3:
         st.warning("⚠️ 模型返回标题不足三条，请重新生成")
-    colors = ["#1b5e20","#2e7d32","#4caf50"]  # 深绿→中绿→浅绿
+    colors = ["#1b5e20","#2e7d32","#4caf50"]  # 深绿→浅绿
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#4caf50"
         st.markdown(
             f"""
             <div style="
                 background-color:{color};
-                padding:20px;
+                padding:15px;
                 border-radius:12px;
-                margin-bottom:12px;
-                box-shadow: 2px 2px 8px rgba(0,0,0,0.2);
-                color:#ffffff;
-                font-weight:bold;
+                margin-bottom:10px;
+                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
             ">
-                <div style="font-size:18px; margin-bottom:8px;">推荐标题 {idx+1}:</div>
-                <div style="font-size:20px; margin-bottom:5px;">{title}</div>
-                <button onclick="navigator.clipboard.writeText('{title}')"
-                        style='padding:5px 10px; margin-top:5px; border:none; border-radius:5px; background-color:#ffffff; color:{color}; cursor:pointer; font-weight:bold;'>
-                    复制标题
-                </button>
-                <div style="margin-top:10px; font-size:14px; font-weight:normal; color:#f0f0f0;">
-                    中文翻译: {cn}<br>
-                    推荐理由: {reason}
+                <div style="color:white; font-size:18px; font-weight:bold;">{title}</div>
+                <div>
+                    <button onclick="navigator.clipboard.writeText('{title}')"
+                            title="复制标题"
+                            style='cursor:pointer; font-size:18px; border:none; background:none; color:white;'>📋</button>
                 </div>
+            </div>
+            <div style="margin-bottom:15px; color:#f0f0f0; font-size:14px;">
+                中文翻译: {cn}<br>
+                推荐理由: {reason}
             </div>
             """, unsafe_allow_html=True
         )
