@@ -195,7 +195,7 @@ if (btn_prod or btn_mod) and u_file:
                 log_area.success("✅ 商品图生成成功")
             else:
                 log_area.error("❌ 商品图生成失败")
-                st.json(p_img)  # 调试信息
+                st.json(p_img)
 
         if btn_mod:
             log_area.info("⏳ 模特图生成中...")
@@ -207,7 +207,7 @@ if (btn_prod or btn_mod) and u_file:
                 log_area.success("✅ 模特图生成成功")
             else:
                 log_area.error("❌ 模特图生成失败")
-                st.json(m_img_res)  # 调试信息
+                st.json(m_img_res)
     except Exception as e:
         log_area.error(f"生成图片时发生错误: {e}")
 
@@ -215,33 +215,45 @@ if (btn_prod or btn_mod) and u_file:
 tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
 with tab_prod:
     if st.session_state.p_img:
+        st.markdown(
+            """
+            <div style="padding:10px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.1); background:#fff;">
+            """, unsafe_allow_html=True)
         display_image(st.session_state.p_img)
+        st.markdown("</div>", unsafe_allow_html=True)
+
 with tab_model:
     if st.session_state.m_img:
+        st.markdown(
+            """
+            <div style="padding:10px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.1); background:#fff;">
+            """, unsafe_allow_html=True)
         display_image(st.session_state.m_img)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # --- 显示优化标题 ---
 if st.session_state.seo_result and isinstance(st.session_state.seo_result, str):
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result + "\n", re.DOTALL)
-    colors = ["#f0a500","#f4c542","#fde8a9"]  # 暖色调渐变
-    st.subheader("优化标题")
-    for idx,(title,cn,reason) in enumerate(matches[:3]):
-        color = colors[idx] if idx < len(colors) else "#fde8a9"
+    colors = ["linear-gradient(90deg, #f0a500, #f4c542)", 
+              "linear-gradient(90deg, #f4c542, #fde8a9)", 
+              "linear-gradient(90deg, #fde8a9, #fff4cc)"]
+    
+    st.subheader("✨ 优化标题")
+    for idx, (title, cn, reason) in enumerate(matches[:3]):
+        color = colors[idx] if idx < len(colors) else "linear-gradient(90deg, #fde8a9, #fff4cc)"
         st.markdown(
             f"""
             <div style="
-                background-color:{color};
-                padding:15px;
-                border-radius:12px;
-                margin-bottom:10px;
-                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
+                background: {color};
+                padding: 20px;
+                border-radius: 15px;
+                margin-bottom: 15px;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.15);
             ">
-                <div style="color:#333; font-size:18px; font-weight:bold;">{title}</div>
-                <div style="margin-top:5px; color:#444; font-size:14px;">
-                    中文翻译: {cn}<br>
-                    推荐理由: {reason}
-                </div>
+                <div style="color:#222; font-size:20px; font-weight:bold; margin-bottom:8px;">{title}</div>
+                <div style="color:#444; font-size:15px; margin-bottom:5px;">中文翻译: {cn}</div>
+                <div style="color:#555; font-size:14px;">推荐理由: {reason}</div>
             </div>
             """, unsafe_allow_html=True
         )
