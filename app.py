@@ -5,7 +5,6 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 import re
-from streamlit_clipboard import clipboard  # pip install streamlit-clipboard
 
 # ==========================================
 # 模型库
@@ -190,9 +189,10 @@ if st.session_state.seo_result:
                 """, unsafe_allow_html=True
             )
         with col2:
-            # 复制按钮图标
-            if clipboard(title, "📋"):
-                st.success("标题已复制到剪贴板！")
+            # Streamlit 纯复制方案
+            st.text_input("", value=title, key=f"copy_{idx}", label_visibility="collapsed")
+            if st.button("📋", key=f"btn_copy_{idx}"):
+                st.success("标题已选中，请按 Ctrl+C 复制")
 
 # --- 商品图 ---
 if btn_prod and u_file:
