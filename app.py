@@ -5,7 +5,6 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 import re
-import time
 
 # ==========================================
 # 模型库
@@ -19,11 +18,10 @@ ALL_DRAWING_MODELS = {
 }
 
 ALL_TEXT_MODELS = [
+    "openrouter/auto",
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-chat",
     "openai/gpt-5.4",
-    "google/gemini-3.1-flash-image-preview",
-    "openrouter/auto"
 ]
 
 # ------------------------------------------
@@ -35,20 +33,15 @@ def safe_post(url, headers, json_data, timeout=60):
         res.raise_for_status()
         return res.json()
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": f"请求失败: {e}"}
 
 # ------------------------------------------
-# 显示图片
+# 显示图片 + 下载按钮
 # ------------------------------------------
-def display_image(data, log_area=None):
-    """
-    通用显示图片：
-    - 支持 Base64、URL
-    - 打印原始返回 JSON
-    """
+def display_image(data, log_area=None, filename="image.png"):
     try:
         if log_area:
-            log_area.info(f"🔹 显示前原始数据:\n{data}")
+            log_area.info(f"🔹 原始模型返回数据:\n{data}")
 
         img_data = None
         if isinstance(data, dict):
@@ -64,18 +57,31 @@ def display_image(data, log_area=None):
         if not img_data:
             raise ValueError("未找到可用图片字段")
 
+        # Base64 格式
         if isinstance(img_data, str) and img_data.startswith("data:image"):
             img_base64 = img_data.split(",")[1]
             img = Image.open(BytesIO(base64.b64decode(img_base64)))
-            st.image(img, use_column_width=True)
         elif isinstance(img_data, str) and img_data.startswith("http"):
-            st.image(img_data, use_column_width=True)
+            img = img_data
         else:
             raise ValueError(f"图片格式未知: {type(img_data)}")
 
+        col_width = st.columns(1)[0].width
+        st.image(img, width=col_width)
+
+        # 下载按钮
+        if isinstance(img, Image.Image):
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            st.download_button(
+                label="⬇️ 下载图片",
+                data=buf.getvalue(),
+                file_name=filename,
+                mime="image/png"
+            )
+
         if log_area:
             log_area.success(f"✅ 图片显示成功，类型: {type(img_data)}")
-
     except Exception as e:
         if log_area:
             log_area.error(f"❌ 图片显示失败: {e}")
@@ -93,93 +99,80 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    # 商品/模特图生成
+    # 商品/模特图生成（背景替换，1:1，PNG）
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
-        mid = ALL_DRAWING_MODELS.get(mid_key)
-        if not file:
-            if log_area:
-                log_area.error("未上传原图")
-            return None
-
-        if log_area:
-            log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
-
-        b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
-        v_payload = {
-            "model": "google/gemini-3.1-flash-image-preview",
-            "messages": [
-                {"role": "user", "content": [
-                    {"type": "text", "text": f"生成 {p_type} 图，标题：{title}，饰品类型：{category}，目标人群：{gender}"},
-                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_in}"}}
-                ]}
-            ]
-        }
-
-        v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
-        if log_area:
-            log_area.info(f"🔹 模型初步返回:\n{v_res_json}")
-
-        prompt = f"{p_type} photography. 标题：{title}, 性别：{gender}, 饰品类型：{category}, 市场：{market}. 8k 高端饰品风格"
-        res_payload = {
-            "model": mid,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
-            "modalities": ["image"]
-        }
-
-        res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
-        if log_area:
-            log_area.info(f"🔹 模型最终返回:\n{res_json}")
-
-        img_data = None
         try:
+            mid = ALL_DRAWING_MODELS.get(mid_key)
+            if not file:
+                if log_area:
+                    log_area.error("❌ 未上传原图")
+                return None
+            b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
+            prompt = (
+                f"{p_type} photography, replace the background of the uploaded product image, "
+                f"retain the original product, 1:1 ratio, high-end jewelry style, "
+                f"Title: {title}, Gender: {gender}, Category: {category}, Market: {market}. "
+                f"Background: warm Morandi tones or neutral skin tones, geometric props allowed, soft lighting."
+            )
+            payload = {
+                "model": mid,
+                "messages": [
+                    {"role": "user", "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_in}"}}
+                    ]}
+                ],
+                "modalities": ["image"]
+            }
+            if log_area:
+                log_area.info("⏳ 图片生成请求发送中...")
+            res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload, timeout=120)
+            if log_area:
+                log_area.info(f"🔹 模型返回: {res_json}")
             choices = res_json.get('choices', [{}])
             msg = choices[0].get('message', {})
-            if "images" in msg and msg["images"]:
-                img_data = msg["images"][0]
-            elif "image_url" in msg:
-                img_data = msg["image_url"].get("url")
-            elif "content" in msg:
-                img_data = msg["content"]
-
-            if img_data is None:
+            img_list = msg.get('images', [])
+            if img_list:
                 if log_area:
-                    log_area.warning("⚠️ 图片字段为空，返回原始模型数据")
+                    log_area.success("✅ 图片生成成功")
+                return img_list[0]
+            else:
+                if log_area:
+                    log_area.error("❌ 图片生成失败，无返回图像")
                 return res_json
-
-            return img_data
-
         except Exception as e:
             if log_area:
-                log_area.error(f"❌ 图片提取失败: {e}")
-            return res_json
+                log_area.error(f"❌ 生成图片异常: {e}")
+            return {"error": str(e)}
 
     # 标题生成
     def run_seo(self, model_id, title, market, gender, category, log_area=None):
-        if log_area:
-            log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
-        seo_prompt = f"""
-请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按推荐级别排序。
-输出格式：
-推荐标题一：****
-中文翻译：****
-推荐理由：****
-推荐标题二：****
-中文翻译：****
-推荐理由：****
-推荐标题三：****
-中文翻译：****
-推荐理由：****
-"""
-        res_json = safe_post(
-            "https://openrouter.ai/api/v1/chat/completions",
-            self.headers,
-            {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
-            timeout=60
-        )
-        if log_area:
-            log_area.info(f"🔹 标题生成返回:\n{res_json}")
-        content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        return content.strip()
+        try:
+            seo_prompt = (
+                f"请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，"
+                "生成三条优化标题，按点击率和浏览量综合排序，输出格式包含中文翻译和推荐理由。"
+            )
+            if log_area:
+                log_area.info("⏳ 标题生成请求发送中...")
+            res_json = safe_post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                self.headers,
+                {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
+                timeout=60
+            )
+            if log_area:
+                log_area.info(f"🔹 模型返回: {res_json}")
+            content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
+            if log_area:
+                if content:
+                    log_area.success("✅ 标题生成成功")
+                else:
+                    log_area.error("❌ 标题生成失败")
+            return content.strip()
+        except Exception as e:
+            if log_area:
+                log_area.error(f"❌ 生成标题异常: {e}")
+            return str(e)
 
 # ==========================================
 # Streamlit UI
@@ -187,7 +180,7 @@ class JewelryAIEngineV48:
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
 engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
 
-# session_state
+# session_state 初始化
 for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
@@ -200,8 +193,10 @@ with st.sidebar:
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"], index=0)
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
+
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=1)
+
     if st.button("重置"):
         u_title = ""
         u_file = None
@@ -220,35 +215,22 @@ btn_mod = c3.button("👤 生成模特图")
 # 日志区域
 log_area = st.empty()
 
-# --- 生成标题 ---
+# 生成标题
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(
-        model_id=model_text,
-        title=u_title,
-        market=u_market,
-        gender=u_gender,
-        category=u_category,
-        log_area=log_area
-    )
+    st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category, log_area)
 
 if st.session_state.seo_result:
+    st.subheader("优化标题")
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
     colors = ["#f0a500","#f4c542","#fde8a9"]
-    st.subheader("优化标题")
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#fde8a9"
         st.markdown(
             f"""
-            <div style="
-                background-color:{color};
-                padding:15px;
-                border-radius:12px;
-                margin-bottom:10px;
-                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
-            ">
-                <div style="color:#333; font-size:18px; font-weight:bold;">{title}</div>
-                <div style="margin-top:5px; color:#444; font-size:14px;">
+            <div style="background-color:{color};padding:15px;border-radius:12px;margin-bottom:10px;box-shadow: 1px 1px 6px rgba(0,0,0,0.2);">
+                <div style="color:#333;font-size:18px;font-weight:bold;">{title}</div>
+                <div style="margin-top:5px;color:#444;font-size:14px;">
                     中文翻译: {cn}<br>
                     推荐理由: {reason}
                 </div>
@@ -256,22 +238,23 @@ if st.session_state.seo_result:
             """, unsafe_allow_html=True
         )
 
-# --- 生成商品图/模特图 ---
+# 生成商品图/模特图
 if (btn_prod or btn_mod) and u_file:
-    p_img = m_img_res = None
     if btn_prod:
-        st.session_state.p_img = engine.run_smart_gen(model_img, "商品图",
-                                                      u_title, u_gender, u_category, u_market, u_file, log_area=log_area)
+        st.session_state.p_img = engine.run_smart_gen(
+            model_img, "商品图", u_title, u_gender, u_category, u_market, u_file, log_area
+        )
     if btn_mod:
-        st.session_state.m_img = engine.run_smart_gen(model_img, "模特图",
-                                                      u_title, u_gender, u_category, u_market, u_file, log_area=log_area)
+        st.session_state.m_img = engine.run_smart_gen(
+            model_img, "模特图", u_title, u_gender, u_category, u_market, u_file, log_area
+        )
 
-# --- Tabs 显示图片 ---
+# Tabs 显示图片
 if st.session_state.p_img or st.session_state.m_img:
     tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
     with tab_prod:
         if st.session_state.p_img:
-            display_image(st.session_state.p_img, log_area=log_area)
+            display_image(st.session_state.p_img, log_area, filename="product.png")
     with tab_model:
         if st.session_state.m_img:
-            display_image(st.session_state.m_img, log_area=log_area)
+            display_image(st.session_state.m_img, log_area, filename="model.png")
