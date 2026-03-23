@@ -48,15 +48,14 @@ def display_image(data):
             if data.startswith("data:image"):
                 data = data.split(",")[1]
             st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
-        else:
-            st.error("图片格式不支持")
     except Exception as e:
         st.error(f"图片解析失败: {e}")
+        st.write("原始数据:", str(data)[:500])
 
 # ==========================================
 # AI 引擎
 # ==========================================
-class JewelryAIEngineV48:
+class JewelryAIEngine:
     def __init__(self, api_key):
         self.api_key = api_key
         self.headers = {
@@ -74,6 +73,7 @@ class JewelryAIEngineV48:
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
         if log_area: log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
 
+        # 初步生成请求
         v_payload = {
             "model": "google/gemini-3.1-flash-image-preview",
             "messages": [
@@ -86,33 +86,47 @@ class JewelryAIEngineV48:
         v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
         if log_area: log_area.info(f"{p_type} 初步生成返回 (前200字符): {str(v_res_json)[:200]}")
 
-        v_desc = v_res_json.get('choices', [{}])[0].get('message', {}).get('content', f"{p_type} {category} image")
-        prompt = f"{p_type} photography. {v_desc}. 8k, 高端饰品风格，背景色和道具符合要求。"
-
+        # 最终生成请求
         res_payload = {
             "model": mid,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
+            "messages": [{"role": "user", "content": [{"type": "text", "text": f"{p_type} photography. 高端饰品风格, 背景和道具符合要求。"}]}],
             "modalities": ["image"]
         }
-        time.sleep(1)
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
-
-        # 新增：完整日志显示原始返回
         if log_area: log_area.info(f"{p_type} 最终返回 JSON (前500字符): {str(res_json)[:500]}")
 
-        choices = res_json.get('choices', [{}])
-        msg = choices[0].get('message', {})
-        img_list = msg.get('images', [])
-        result = img_list[0] if img_list else None
+        # 尝试提取图片
+        result = None
+        if isinstance(res_json, dict):
+            choices = res_json.get('choices', [{}])
+            msg = choices[0].get('message', {})
+            img_list = msg.get('images', [])
+            if img_list:
+                result = img_list[0]
+            else:
+                content = msg.get('content', "")
+                if content.startswith("data:image"):
+                    result = content
+                else:
+                    if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:200]}")
+        elif isinstance(res_json, list) and len(res_json) > 1:
+            choices = res_json[1].get('choices', [{}])
+            msg = choices[0].get('message', {})
+            content = msg.get('content', "")
+            if content.startswith("data:image"):
+                result = content
+            else:
+                if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:200]}")
+
         if result and log_area: log_area.success(f"{p_type} 生成成功，数据类型: {type(result)}")
-        if result is None and log_area: log_area.error(f"{p_type} 生成失败")
+        elif log_area: log_area.error(f"{p_type} 生成失败，未获取到图片")
         return result
 
     # 标题生成
     def run_seo(self, model_id, title, market, gender, category, log_area=None):
         if log_area: log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
         seo_prompt = f"""
-请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按点击率和浏览量综合排序。
+请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按推荐级别排序。
 输出格式：
 推荐标题一：****
 中文翻译：****
@@ -130,8 +144,8 @@ class JewelryAIEngineV48:
             {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
             timeout=60
         )
+        if log_area: log_area.info(f"标题生成返回 (前500字符): {str(res_json)[:500]}")
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        if log_area: log_area.info(f"标题生成返回 (前200字符): {str(content)[:200]}")
         if content and log_area: log_area.success("✅ 标题生成完成")
         elif log_area: log_area.error("❌ 标题生成失败")
         return content.strip()
@@ -140,14 +154,14 @@ class JewelryAIEngineV48:
 # Streamlit UI
 # ==========================================
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
-engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
+engine = JewelryAIEngine(st.secrets.get("OPENROUTER_API_KEY", ""))
 
 # session_state
 for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
-# Sidebar 输入
+# Sidebar
 with st.sidebar:
     st.subheader("💎 AM JEWELRY")
     u_title = st.text_input("原始标题", "心形项链")
@@ -155,8 +169,8 @@ with st.sidebar:
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"], index=0)
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
-    seo_model = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
-    img_model = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=0)
+    seo_model = st.selectbox("选择标题优化模型", ALL_TEXT_MODELS, index=0)
+    img_model = st.selectbox("选择图片生成模型", list(ALL_DRAWING_MODELS.keys()), index=1)
     if st.button("重置"):
         u_title = ""
         u_file = None
@@ -172,12 +186,12 @@ btn_seo = c1.button("✨ 生成标题")
 btn_prod = c2.button("🖼️ 生成商品图")
 btn_mod = c3.button("👤 生成模特图")
 
-# 日志区
+# 日志区域
 log_area = st.empty()
 
-# --- 生成标题 ---
+# 生成标题
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(seo_model, u_title, u_market, u_gender, u_category, log_area)
+    st.session_state.seo_result = engine.run_seo(seo_model, u_title, u_market, u_gender, u_category, log_area=log_area)
 
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
@@ -204,19 +218,17 @@ if st.session_state.seo_result:
             """, unsafe_allow_html=True
         )
 
-# --- 生成商品图/模特图 ---
+# 生成图片
 if (btn_prod or btn_mod) and u_file:
     p_img = m_img_res = None
     if btn_prod:
-        log_area.info("开始生成商品图...")
-        p_img = engine.run_smart_gen(img_model, "商品图", u_title, u_gender, u_category, u_market, u_file, log_area)
+        p_img = engine.run_smart_gen(img_model,"商品图", u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
         st.session_state.p_img = p_img
     if btn_mod:
-        log_area.info("开始生成模特图...")
-        m_img_res = engine.run_smart_gen(img_model, "模特图", u_title, u_gender, u_category, u_market, u_file, log_area)
+        m_img_res = engine.run_smart_gen(img_model,"模特图", u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
         st.session_state.m_img = m_img_res
 
-# --- Tabs 显示图片 ---
+# Tabs显示图片
 if st.session_state.p_img or st.session_state.m_img:
     tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
     with tab_prod:
