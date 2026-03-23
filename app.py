@@ -134,6 +134,11 @@ with st.sidebar:
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"], index=0)
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
+
+    # 新增两个选择框
+    u_text_model = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
+    u_image_model = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=0)
+
     if st.button("重置"):
         u_title = ""
         u_file = None
@@ -154,7 +159,7 @@ btn_mod = c3.button("👤 生成模特图")
 # --- 生成标题 ---
 if btn_seo:
     st.session_state.seo_result = engine.run_seo(
-        model_id=ALL_TEXT_MODELS[0],
+        model_id=u_text_model,  # 使用选择的标题生成模型
         title=u_title,
         market=u_market,
         gender=u_gender,
@@ -190,12 +195,18 @@ if st.session_state.seo_result:
 if (btn_prod or btn_mod) and u_file:
     p_img = m_img_res = None
     if btn_prod:
-        p_img = engine.run_smart_gen("google/gemini-3.1-flash-image-preview","商品图",
-                                     u_title,u_gender,u_category,u_market,u_file)
+        p_img = engine.run_smart_gen(
+            u_image_model,  # 使用选择的图片生成模型
+            "商品图",
+            u_title,u_gender,u_category,u_market,u_file
+        )
         st.session_state.p_img = p_img
     if btn_mod:
-        m_img_res = engine.run_smart_gen("google/gemini-3.1-flash-image-preview","模特图",
-                                        u_title,u_gender,u_category,u_market,u_file)
+        m_img_res = engine.run_smart_gen(
+            u_image_model,  # 使用选择的图片生成模型
+            "模特图",
+            u_title,u_gender,u_category,u_market,u_file
+        )
         st.session_state.m_img = m_img_res
 
 # --- Tabs 显示图片 ---
