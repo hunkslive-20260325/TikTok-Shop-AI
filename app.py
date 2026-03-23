@@ -25,7 +25,9 @@ ALL_TEXT_MODELS = [
     "openrouter/auto"
 ]
 
-# 安全请求
+# ------------------------------------------
+# 安全请求函数
+# ------------------------------------------
 def safe_post(url, headers, json_data, timeout=60):
     try:
         res = requests.post(url, headers=headers, json=json_data, timeout=timeout)
@@ -34,7 +36,9 @@ def safe_post(url, headers, json_data, timeout=60):
     except:
         return {"error": "请求失败"}
 
+# ------------------------------------------
 # 显示图片
+# ------------------------------------------
 def display_image(data):
     if isinstance(data, dict) and "url" in data:
         st.image(data["url"], use_column_width=True)
@@ -44,7 +48,7 @@ def display_image(data):
         st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
 
 # ==========================================
-# 核心 AI 引擎
+# AI 引擎
 # ==========================================
 class JewelryAIEngineV48:
     def __init__(self, api_key):
@@ -55,8 +59,8 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    # 图片生成
-    def run_smart_gen(self, mid_key, p_type, cat, market, gen, file):
+    # 商品/模特图生成
+    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
         mid = ALL_DRAWING_MODELS.get(mid_key)
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
 
@@ -64,16 +68,15 @@ class JewelryAIEngineV48:
             "model": "google/gemini-3.1-flash-image-preview",
             "messages": [
                 {"role": "user", "content": [
-                    {"type": "text", "text": "提取形状、材质。"},
+                    {"type": "text", "text": f"生成 {p_type} 图，标题：{title}，饰品类型：{category}，目标人群：{gender}"},
                     {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_in}"}}
                 ]}
             ]
         }
         v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
-        v_desc = v_res_json.get('choices', [{}])[0].get('message', {}).get('content', f"Commercial {cat} jewelry")
+        v_desc = v_res_json.get('choices', [{}])[0].get('message', {}).get('content', f"{p_type} {category} image")
 
-        prompt = f"Commercial jewelry photography. {v_desc}. Background: Morandi tones. 8k." \
-            if p_type == "product" else f"Fashion photography. {gen} model wearing {v_desc}. 8k."
+        prompt = f"{p_type} photography. {v_desc}. 8k, 高端饰品风格，背景色和道具符合要求。"
 
         res_payload = {
             "model": mid,
@@ -87,26 +90,20 @@ class JewelryAIEngineV48:
         return img_list[0] if img_list else None
 
     # 标题生成
-    def run_seo(self, model_id, u_title, u_market, progress_callback=None):
+    def run_seo(self, model_id, title, market, gender, category):
         seo_prompt = f"""
-针对 {u_market} 市场优化标题 '{u_title}'，参考 TikTok 和 Amazon 热搜词。
-请输出三条推荐标题，按点击率和浏览综合评估排序。
-输出格式如下，每条不超过 50 字推荐理由：
-
+请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按点击率和浏览量综合排序。
+输出格式：
 推荐标题一：****
 中文翻译：****
 推荐理由：****
-
 推荐标题二：****
 中文翻译：****
 推荐理由：****
-
 推荐标题三：****
 中文翻译：****
 推荐理由：****
 """
-        if progress_callback:
-            progress_callback(1,3,"正在生成标题...")
         res_json = safe_post(
             "https://openrouter.ai/api/v1/chat/completions",
             self.headers,
@@ -114,11 +111,11 @@ class JewelryAIEngineV48:
             timeout=60
         )
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        if progress_callback:
-            progress_callback(3,3,"标题生成完成")
         return content.strip()
 
-# ================== Streamlit UI ==================
+# ==========================================
+# Streamlit UI
+# ==========================================
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
 engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
 
@@ -127,48 +124,50 @@ for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
-# Sidebar
+# ------------------------------------------
+# Sidebar 输入
+# ------------------------------------------
 with st.sidebar:
     st.subheader("💎 AM JEWELRY")
-    m_txt = st.selectbox("文案/标题模型", ALL_TEXT_MODELS, index=0)
-    m_img = st.selectbox("图像渲染模型", list(ALL_DRAWING_MODELS.keys()), index=0)
-    u_title = st.text_input("1. 原始标题", "心形项链")
-    u_cat = st.selectbox("2. 类型", ["项链", "耳饰", "戒指", "手链", "套装"])
-    u_market = st.selectbox("3. 市场", ["东南亚", "北美", "欧洲"])
-    u_gender = st.radio("4. 性别", ["女性", "男性"], horizontal=True)
-    u_file = st.file_uploader("📸 上传原图", type=["jpg","png","jpeg"])
-    if u_file:
-        st.image(u_file, use_column_width=True)
+    u_title = st.text_input("原始标题", "心形项链")
+    u_market = st.selectbox("目标市场", ["东南亚","美国","日韩","拉美","中东","非洲"], index=0)
+    u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
+    u_gender = st.radio("目标人群", ["女性","男性"], index=0)
+    u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
+    if st.button("重置"):
+        u_title = ""
+        u_file = None
+        st.session_state.seo_result = None
+        st.session_state.p_img = None
+        st.session_state.m_img = None
+        st.experimental_rerun()
 
+# ------------------------------------------
+# 主区
+# ------------------------------------------
 st.title("💎 TikTok Shop 饰品生成 V48")
-
-c1,c2,c3 = st.columns(3)
+c1, c2, c3 = st.columns(3)
 btn_seo = c1.button("✨ 生成标题")
 btn_prod = c2.button("🖼️ 生成商品图")
 btn_mod = c3.button("👤 生成模特图")
 
-# --- 进度显示 ---
-progress_text = st.empty()
-progress_bar = st.progress(0)
-def progress_callback(current,total,msg):
-    progress_text.text(f"{msg} ({current}/{total}) - {datetime.now().strftime('%H:%M:%S')}")
-    progress_bar.progress(current/total)
-
 # --- 生成标题 ---
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(m_txt,u_title,u_market,progress_callback)
-    progress_text.text("✅ 标题生成完成")
-    progress_bar.empty()
+    st.session_state.seo_result = engine.run_seo(
+        model_id=ALL_TEXT_MODELS[0],
+        title=u_title,
+        market=u_market,
+        gender=u_gender,
+        category=u_category
+    )
 
-# --- 显示标题（美观） ---
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
-    if len(matches) < 3:
-        st.warning("⚠️ 模型返回标题不足三条，请重新生成")
-    colors = ["#1b5e20","#2e7d32","#4caf50"]  # 深绿→浅绿
+    colors = ["#f0a500","#f4c542","#fde8a9"]  # 暖色调渐变
+    st.subheader("优化标题")
     for idx,(title,cn,reason) in enumerate(matches[:3]):
-        color = colors[idx] if idx < len(colors) else "#4caf50"
+        color = colors[idx] if idx < len(colors) else "#fde8a9"
         st.markdown(
             f"""
             <div style="
@@ -178,8 +177,8 @@ if st.session_state.seo_result:
                 margin-bottom:10px;
                 box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
             ">
-                <div style="color:white; font-size:18px; font-weight:bold;">{title}</div>
-                <div style="margin-top:5px; color:#f0f0f0; font-size:14px;">
+                <div style="color:#333; font-size:18px; font-weight:bold;">{title}</div>
+                <div style="margin-top:5px; color:#444; font-size:14px;">
                     中文翻译: {cn}<br>
                     推荐理由: {reason}
                 </div>
@@ -187,12 +186,24 @@ if st.session_state.seo_result:
             """, unsafe_allow_html=True
         )
 
-# --- 商品图 ---
-if btn_prod and u_file:
-    img = engine.run_smart_gen(m_img,"product",u_cat,u_market,u_gender,u_file)
-    if img: display_image(img)
+# --- 生成商品图/模特图 ---
+if (btn_prod or btn_mod) and u_file:
+    p_img = m_img_res = None
+    if btn_prod:
+        p_img = engine.run_smart_gen("google/gemini-3.1-flash-image-preview","商品图",
+                                     u_title,u_gender,u_category,u_market,u_file)
+        st.session_state.p_img = p_img
+    if btn_mod:
+        m_img_res = engine.run_smart_gen("google/gemini-3.1-flash-image-preview","模特图",
+                                        u_title,u_gender,u_category,u_market,u_file)
+        st.session_state.m_img = m_img_res
 
-# --- 模特图 ---
-if btn_mod and u_file:
-    img = engine.run_smart_gen(m_img,"model",u_cat,u_market,u_gender,u_file)
-    if img: display_image(img)
+# --- Tabs 显示图片 ---
+if st.session_state.p_img or st.session_state.m_img:
+    tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
+    with tab_prod:
+        if st.session_state.p_img:
+            display_image(st.session_state.p_img)
+    with tab_model:
+        if st.session_state.m_img:
+            display_image(st.session_state.m_img)
