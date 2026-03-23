@@ -41,7 +41,7 @@ def safe_post(url, headers, json_data, timeout=60):
 def display_image(data, log_area=None, filename="image.png"):
     try:
         if log_area:
-            log_area.info(f"🔹 原始模型返回数据:\n{data}")
+            log_area.info(f"🔹 原始模型返回数据类型: {type(data)}")
 
         img_data = None
         if isinstance(data, dict):
@@ -64,10 +64,14 @@ def display_image(data, log_area=None, filename="image.png"):
         elif isinstance(img_data, str) and img_data.startswith("http"):
             img = img_data
         else:
-            raise ValueError(f"图片格式未知: {type(img_data)}")
+            # 尝试直接解码，处理纯 Base64 字符串
+            try:
+                img = Image.open(BytesIO(base64.b64decode(img_data)))
+            except:
+                raise ValueError(f"图片格式未知: {type(img_data)}")
 
-        col_width = st.columns(1)[0].width
-        st.image(img, width=col_width)
+        # --- 核心修复：使用 use_container_width 代替手动计算宽度 ---
+        st.image(img, use_container_width=True)
 
         # 下载按钮
         if isinstance(img, Image.Image):
@@ -81,7 +85,7 @@ def display_image(data, log_area=None, filename="image.png"):
             )
 
         if log_area:
-            log_area.success(f"✅ 图片显示成功，类型: {type(img_data)}")
+            log_area.success(f"✅ 图片显示成功")
     except Exception as e:
         if log_area:
             log_area.error(f"❌ 图片显示失败: {e}")
@@ -99,7 +103,7 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    # 商品/模特图生成（背景替换，1:1，PNG）
+    # 商品/模特图生成
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
@@ -127,11 +131,11 @@ class JewelryAIEngineV48:
             if log_area:
                 log_area.info("⏳ 图片生成请求发送中...")
             res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload, timeout=120)
-            if log_area:
-                log_area.info(f"🔹 模型返回: {res_json}")
+            
             choices = res_json.get('choices', [{}])
             msg = choices[0].get('message', {})
             img_list = msg.get('images', [])
+            
             if img_list:
                 if log_area:
                     log_area.success("✅ 图片生成成功")
@@ -160,8 +164,6 @@ class JewelryAIEngineV48:
                 {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
                 timeout=60
             )
-            if log_area:
-                log_area.info(f"🔹 模型返回: {res_json}")
             content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
             if log_area:
                 if content:
@@ -178,7 +180,10 @@ class JewelryAIEngineV48:
 # Streamlit UI
 # ==========================================
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
-engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
+
+# 安全获取 API KEY
+api_key = st.secrets.get("OPENROUTER_API_KEY", "")
+engine = JewelryAIEngineV48(api_key)
 
 # session_state 初始化
 for key in ["seo_result","p_img","m_img"]:
@@ -198,12 +203,10 @@ with st.sidebar:
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=1)
 
     if st.button("重置"):
-        u_title = ""
-        u_file = None
         st.session_state.seo_result = None
         st.session_state.p_img = None
         st.session_state.m_img = None
-        st.experimental_rerun()
+        st.rerun() # 更新为最新的 rerun 方法
 
 # 主区
 st.title("💎 TikTok Shop 饰品生成 V48")
@@ -224,19 +227,24 @@ if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
     colors = ["#f0a500","#f4c542","#fde8a9"]
-    for idx,(title,cn,reason) in enumerate(matches[:3]):
-        color = colors[idx] if idx < len(colors) else "#fde8a9"
-        st.markdown(
-            f"""
-            <div style="background-color:{color};padding:15px;border-radius:12px;margin-bottom:10px;box-shadow: 1px 1px 6px rgba(0,0,0,0.2);">
-                <div style="color:#333;font-size:18px;font-weight:bold;">{title}</div>
-                <div style="margin-top:5px;color:#444;font-size:14px;">
-                    中文翻译: {cn}<br>
-                    推荐理由: {reason}
+    
+    if not matches:
+        # 如果正则匹配失败，直接显示原文
+        st.info(st.session_state.seo_result)
+    else:
+        for idx,(title,cn,reason) in enumerate(matches[:3]):
+            color = colors[idx] if idx < len(colors) else "#fde8a9"
+            st.markdown(
+                f"""
+                <div style="background-color:{color};padding:15px;border-radius:12px;margin-bottom:10px;box-shadow: 1px 1px 6px rgba(0,0,0,0.2);">
+                    <div style="color:#333;font-size:18px;font-weight:bold;">{title}</div>
+                    <div style="margin-top:5px;color:#444;font-size:14px;">
+                        中文翻译: {cn}<br>
+                        推荐理由: {reason}
+                    </div>
                 </div>
-            </div>
-            """, unsafe_allow_html=True
-        )
+                """, unsafe_allow_html=True
+            )
 
 # 生成商品图/模特图
 if (btn_prod or btn_mod) and u_file:
