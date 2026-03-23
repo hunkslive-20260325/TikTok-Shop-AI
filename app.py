@@ -84,7 +84,7 @@ class JewelryAIEngineV48:
             ]
         }
         v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
-        if log_area: log_area.info(f"初步生成返回: {str(v_res_json)[:200]}")
+        if log_area: log_area.info(f"{p_type} 初步生成返回 (前200字符): {str(v_res_json)[:200]}")
 
         v_desc = v_res_json.get('choices', [{}])[0].get('message', {}).get('content', f"{p_type} {category} image")
         prompt = f"{p_type} photography. {v_desc}. 8k, 高端饰品风格，背景色和道具符合要求。"
@@ -96,13 +96,15 @@ class JewelryAIEngineV48:
         }
         time.sleep(1)
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
-        if log_area: log_area.info(f"{p_type} 最终返回: {str(res_json)[:200]}")
+
+        # 新增：完整日志显示原始返回
+        if log_area: log_area.info(f"{p_type} 最终返回 JSON (前500字符): {str(res_json)[:500]}")
 
         choices = res_json.get('choices', [{}])
         msg = choices[0].get('message', {})
         img_list = msg.get('images', [])
         result = img_list[0] if img_list else None
-        if result and log_area: log_area.info(f"{p_type} 生成成功，数据类型: {type(result)}")
+        if result and log_area: log_area.success(f"{p_type} 生成成功，数据类型: {type(result)}")
         if result is None and log_area: log_area.error(f"{p_type} 生成失败")
         return result
 
@@ -129,7 +131,7 @@ class JewelryAIEngineV48:
             timeout=60
         )
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        if log_area: log_area.info(f"标题生成返回: {str(content)[:200]}")
+        if log_area: log_area.info(f"标题生成返回 (前200字符): {str(content)[:200]}")
         if content and log_area: log_area.success("✅ 标题生成完成")
         elif log_area: log_area.error("❌ 标题生成失败")
         return content.strip()
@@ -205,31 +207,14 @@ if st.session_state.seo_result:
 # --- 生成商品图/模特图 ---
 if (btn_prod or btn_mod) and u_file:
     p_img = m_img_res = None
-    # 商品图
     if btn_prod:
         log_area.info("开始生成商品图...")
         p_img = engine.run_smart_gen(img_model, "商品图", u_title, u_gender, u_category, u_market, u_file, log_area)
-        if p_img:
-            log_area.success("商品图生成完成")
-        else:
-            log_area.error("商品图生成失败")
         st.session_state.p_img = p_img
-        log_area.info(f"返回数据类型: {type(p_img)}")
-        if isinstance(p_img, str) and not p_img.startswith("data:image"):
-            log_area.warning(f"注意：字符串返回，但不是 base64 图片，内容摘要: {p_img[:100]}")
-
-    # 模特图
     if btn_mod:
         log_area.info("开始生成模特图...")
         m_img_res = engine.run_smart_gen(img_model, "模特图", u_title, u_gender, u_category, u_market, u_file, log_area)
-        if m_img_res:
-            log_area.success("模特图生成完成")
-        else:
-            log_area.error("模特图生成失败")
         st.session_state.m_img = m_img_res
-        log_area.info(f"返回数据类型: {type(m_img_res)}")
-        if isinstance(m_img_res, str) and not m_img_res.startswith("data:image"):
-            log_area.warning(f"注意：字符串返回，但不是 base64 图片，内容摘要: {m_img_res[:100]}")
 
 # --- Tabs 显示图片 ---
 if st.session_state.p_img or st.session_state.m_img:
