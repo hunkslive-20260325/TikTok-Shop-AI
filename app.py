@@ -28,7 +28,7 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": "请求失败"}
 
 # ------------------------------------------
-# 显示图片
+# 显示图片函数（统一处理 URL 或 Base64）
 # ------------------------------------------
 def display_image(data):
     if not data:
@@ -37,12 +37,14 @@ def display_image(data):
     if isinstance(data, dict) and "url" in data:
         st.image(data["url"], use_column_width=True)
     elif isinstance(data, str):
+        b64_data = data
         if data.startswith("data:image"):
-            data = data.split(",")[1]
+            b64_data = data.split(",")[1]
         try:
-            st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
-        except:
-            st.error("图片解析失败")
+            img = Image.open(BytesIO(base64.b64decode(b64_data)))
+            st.image(img, use_column_width=True)
+        except Exception as e:
+            st.error(f"图片解析失败: {e}")
 
 # ==========================================
 # AI 引擎
@@ -65,7 +67,7 @@ class JewelryAIEngine:
         log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
 
-        prompt = f"{p_type} photography. 标题：{title}, 性别：{gender}, 饰品类型：{category}, 市场：{market}. 8k 高端饰品风格"
+        prompt = f"{p_type} photography. 标题：{title}, 性别：{gender}, 饰品类型：{category}, 市场：{market}. 高端饰品风格，背景和光影符合要求"
 
         res_payload = {
             "model": mid,
@@ -156,9 +158,9 @@ if st.session_state.seo_result:
     tab_seo_area.markdown("### 优化标题")
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
-    colors = ["#f0a500","#f4c542","#fde8a9"]
+    colors = ["#f0f8ff","#d0f0c0","#fffacd"]  # 更易阅读的柔和背景色
     for idx,(title,cn,reason) in enumerate(matches[:3]):
-        color = colors[idx] if idx < len(colors) else "#fde8a9"
+        color = colors[idx] if idx < len(colors) else "#fffacd"
         st.markdown(
             f"""
             <div style="
