@@ -5,7 +5,6 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 import re
-import time
 
 # ==========================================
 # 模型库
@@ -48,9 +47,10 @@ def display_image(data):
             if data.startswith("data:image"):
                 data = data.split(",")[1]
             st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
+        else:
+            st.error("图片数据格式不支持")
     except Exception as e:
         st.error(f"图片解析失败: {e}")
-        st.write("原始数据前1000字符:", str(data)[:1000])
 
 # ==========================================
 # AI 引擎
@@ -64,6 +64,7 @@ class JewelryAIEngine:
             "X-Title": "Jewelry_V48"
         }
 
+    # 商品/模特图生成
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
         mid = ALL_DRAWING_MODELS.get(mid_key)
         if not file:
@@ -72,8 +73,7 @@ class JewelryAIEngine:
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
         if log_area: log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
 
-        # 初步生成
-        v_payload = {
+        payload = {
             "model": mid,
             "messages": [
                 {"role": "user", "content": [
@@ -82,50 +82,39 @@ class JewelryAIEngine:
                 ]}
             ]
         }
-        v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
-        if log_area: log_area.info(f"{p_type} 初步生成完整返回:\n{v_res_json}")
 
-        # 最终生成
-        final_prompt = f"{p_type} photography. 高端饰品风格, 背景和道具符合要求。"
-        res_payload = {
-            "model": mid,
-            "messages": [{"role": "user", "content": [{"type": "text", "text": final_prompt}]}],
-            "modalities": ["image"]
-        }
-        res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
-        if log_area: log_area.info(f"{p_type} 最终生成完整返回:\n{res_json}")
+        res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload, timeout=120)
+        if log_area: log_area.info(f"{p_type} 返回原始 JSON:\n{res_json}")
 
+        # 尝试提取图片数据
         result = None
         try:
             if isinstance(res_json, dict):
-                choices = res_json.get('choices', [{}])
-                msg = choices[0].get('message', {})
-                img_list = msg.get('images', [])
-                if img_list:
-                    result = img_list[0]
+                if res_json.get("type") == "image_url":
+                    result = res_json["image_url"]["url"]
                 else:
-                    content = msg.get('content', "")
-                    if content and content.startswith("data:image"):
-                        result = content
-                    elif log_area:
-                        log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:500]}")
+                    choices = res_json.get("choices", [{}])
+                    msg = choices[0].get("message", {})
+                    img_list = msg.get("images", [])
+                    if img_list:
+                        result = img_list[0]
             elif isinstance(res_json, list) and len(res_json) > 1:
-                choices = res_json[1].get('choices', [{}])
-                msg = choices[0].get('message', {})
-                content = msg.get('content', "")
+                choices = res_json[1].get("choices", [{}])
+                msg = choices[0].get("message", {})
+                content = msg.get("content")
                 if content and content.startswith("data:image"):
                     result = content
-                elif log_area:
-                    log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:500]}")
         except Exception as e:
-            if log_area: log_area.error(f"{p_type} 提取图片异常: {e}\n返回内容: {res_json}")
+            if log_area: log_area.error(f"{p_type} 提取图片异常: {e}")
 
-        if result and log_area: log_area.success(f"{p_type} 生成成功，数据类型: {type(result)}")
-        elif log_area: log_area.error(f"{p_type} 生成失败，未获取到图片，完整返回内容:\n{res_json}")
+        if result:
+            if log_area: log_area.success(f"{p_type} 生成成功，数据类型: {type(result)}")
+        else:
+            if log_area: log_area.error(f"{p_type} 生成失败，未获取到图片")
         return result
 
+    # 标题生成
     def run_seo(self, model_id, title, market, gender, category, log_area=None):
-        if log_area: log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
         seo_prompt = f"""
 请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按推荐级别排序。
 输出格式：
@@ -139,16 +128,19 @@ class JewelryAIEngine:
 中文翻译：****
 推荐理由：****
 """
+        if log_area: log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
         res_json = safe_post(
             "https://openrouter.ai/api/v1/chat/completions",
             self.headers,
             {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
             timeout=60
         )
-        if log_area: log_area.info(f"标题生成返回完整 JSON:\n{res_json}")
+        if log_area: log_area.info(f"标题生成返回 JSON:\n{res_json}")
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        if content and log_area: log_area.success("✅ 标题生成完成")
-        elif log_area: log_area.error("❌ 标题生成失败")
+        if content:
+            if log_area: log_area.success("✅ 标题生成完成")
+        else:
+            if log_area: log_area.error("❌ 标题生成失败")
         return content.strip()
 
 # ==========================================
@@ -162,7 +154,9 @@ for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
 
-# Sidebar
+# ------------------------------------------
+# Sidebar 输入
+# ------------------------------------------
 with st.sidebar:
     st.subheader("💎 AM JEWELRY")
     u_title = st.text_input("原始标题", "心形项链")
@@ -170,8 +164,11 @@ with st.sidebar:
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"], index=0)
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
-    seo_model = st.selectbox("选择标题优化模型", ALL_TEXT_MODELS, index=0)
-    img_model = st.selectbox("选择图片生成模型", list(ALL_DRAWING_MODELS.keys()), index=1)
+
+    # 模型选择
+    seo_model = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
+    img_model = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=1)
+
     if st.button("重置"):
         u_title = ""
         u_file = None
@@ -180,7 +177,9 @@ with st.sidebar:
         st.session_state.m_img = None
         st.experimental_rerun()
 
+# ------------------------------------------
 # 主区
+# ------------------------------------------
 st.title("💎 TikTok Shop 饰品生成 V48")
 c1, c2, c3 = st.columns(3)
 btn_seo = c1.button("✨ 生成标题")
@@ -230,11 +229,11 @@ tab_img_area = st.empty()
 if (btn_prod or btn_mod) and u_file:
     log_area = tab_img_area
     if btn_prod:
-        p_img = engine.run_smart_gen(img_model,"商品图",u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
-        st.session_state.p_img = p_img
+        st.session_state.p_img = engine.run_smart_gen(img_model, "商品图",
+                                     u_title,u_gender,u_category,u_market,u_file, log_area)
     if btn_mod:
-        m_img_res = engine.run_smart_gen(img_model,"模特图",u_title,u_gender,u_category,u_market,u_file, log_area=log_area)
-        st.session_state.m_img = m_img_res
+        st.session_state.m_img = engine.run_smart_gen(img_model, "模特图",
+                                        u_title,u_gender,u_category,u_market,u_file, log_area)
 
 # --- Tabs 显示图片 ---
 if st.session_state.p_img or st.session_state.m_img:
