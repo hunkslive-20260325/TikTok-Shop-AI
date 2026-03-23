@@ -84,7 +84,7 @@ class JewelryAIEngine:
             ]
         }
         v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
-        if log_area: log_area.info(f"{p_type} 初步生成返回 (前200字符): {str(v_res_json)[:200]}")
+        if log_area: log_area.info(f"{p_type} 初步生成返回 (前1000字符): {str(v_res_json)[:1000]}")
 
         # 最终生成请求
         res_payload = {
@@ -108,7 +108,7 @@ class JewelryAIEngine:
                 if content.startswith("data:image"):
                     result = content
                 else:
-                    if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:200]}")
+                    if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:1000]}")
         elif isinstance(res_json, list) and len(res_json) > 1:
             choices = res_json[1].get('choices', [{}])
             msg = choices[0].get('message', {})
@@ -116,7 +116,7 @@ class JewelryAIEngine:
             if content.startswith("data:image"):
                 result = content
             else:
-                if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:200]}")
+                if log_area: log_area.warning(f"{p_type} 未返回图片，返回内容摘要: {content[:1000]}")
 
         if result and log_area: log_area.success(f"{p_type} 生成成功，数据类型: {type(result)}")
         elif log_area: log_area.error(f"{p_type} 生成失败，未获取到图片")
