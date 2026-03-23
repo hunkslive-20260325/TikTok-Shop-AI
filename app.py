@@ -160,7 +160,7 @@ if btn_seo:
     progress_text.text("✅ 标题生成完成")
     progress_bar.empty()
 
-# --- 显示标题（美观+复制图标） ---
+# --- 显示标题（美观） ---
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
@@ -169,30 +169,23 @@ if st.session_state.seo_result:
     colors = ["#1b5e20","#2e7d32","#4caf50"]  # 深绿→浅绿
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#4caf50"
-        col1, col2 = st.columns([0.95,0.05])
-        with col1:
-            st.markdown(
-                f"""
-                <div style="
-                    background-color:{color};
-                    padding:15px;
-                    border-radius:12px;
-                    margin-bottom:10px;
-                    box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
-                ">
-                    <div style="color:white; font-size:18px; font-weight:bold;">{title}</div>
-                    <div style="margin-top:5px; color:#f0f0f0; font-size:14px;">
-                        中文翻译: {cn}<br>
-                        推荐理由: {reason}
-                    </div>
+        st.markdown(
+            f"""
+            <div style="
+                background-color:{color};
+                padding:15px;
+                border-radius:12px;
+                margin-bottom:10px;
+                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
+            ">
+                <div style="color:white; font-size:18px; font-weight:bold;">{title}</div>
+                <div style="margin-top:5px; color:#f0f0f0; font-size:14px;">
+                    中文翻译: {cn}<br>
+                    推荐理由: {reason}
                 </div>
-                """, unsafe_allow_html=True
-            )
-        with col2:
-            # Streamlit 纯复制方案
-            st.text_input("", value=title, key=f"copy_{idx}", label_visibility="collapsed")
-            if st.button("📋", key=f"btn_copy_{idx}"):
-                st.success("标题已选中，请按 Ctrl+C 复制")
+            </div>
+            """, unsafe_allow_html=True
+        )
 
 # --- 商品图 ---
 if btn_prod and u_file:
