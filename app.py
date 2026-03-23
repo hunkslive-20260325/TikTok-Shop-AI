@@ -37,18 +37,14 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": str(e)}
 
 # ------------------------------------------
-# 显示图片（支持 base64 和嵌套 image_url）
+# 显示图片 / 文本信息
 # ------------------------------------------
 def display_image(data):
-    """
-    显示图片：
-    支持：
-    - dict 包含 "url" 或 "image_url": {"url": ...}
-    - base64 字符串
-    """
     try:
         if isinstance(data, dict):
-            if "url" in data:
+            if "text" in data:
+                st.info(f"模型返回信息:\n{data['text']}")
+            elif "url" in data:
                 st.image(data["url"], use_column_width=True)
             elif "image_url" in data and "url" in data["image_url"]:
                 st.image(data["image_url"]["url"], use_column_width=True)
@@ -89,6 +85,7 @@ class JewelryAIEngineV48:
         mid = ALL_DRAWING_MODELS.get(mid_key)
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
 
+        # 先调用 OpenRouter 文字提示（通用）
         v_payload = {
             "model": "google/gemini-3.1-flash-image-preview",
             "messages": [
@@ -110,13 +107,24 @@ class JewelryAIEngineV48:
         }
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
 
-        choices = res_json.get('choices', [{}])
-        msg = choices[0].get('message', {})
-        img_list = msg.get('images', [])
-        if img_list and isinstance(img_list, list):
-            return img_list[0]  # 返回第一个图片
+        # 根据不同模型返回
+        if mid_key.startswith("openrouter"):
+            choices = res_json.get('choices', [{}])
+            msg = choices[0].get('message', {})
+            img_list = msg.get('images', [])
+            if img_list and isinstance(img_list, list):
+                return img_list[0]
+            else:
+                return None, res_json
+        elif mid_key.startswith("google/gemini"):
+            # Google 模型返回文字提示
+            if isinstance(res_json, list) and len(res_json) > 1:
+                content = res_json[1].get('choices', [{}])[0].get('message', {}).get('content', "")
+                return {"text": content}
+            else:
+                return {"text": str(res_json)}
         else:
-            return None, res_json  # 返回失败信息方便调试
+            return None, res_json
 
     def run_seo(self, model_id, title, market, gender, category):
         seo_prompt = f"""
