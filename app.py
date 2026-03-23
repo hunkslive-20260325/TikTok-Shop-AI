@@ -35,7 +35,6 @@ def safe_post(url, headers, json_data, timeout=60):
         res.raise_for_status()
         return res.json()
     except Exception as e:
-        print(f"[ERROR] 请求失败: {e}")
         return {"error": str(e)}
 
 # ------------------------------------------
@@ -50,7 +49,7 @@ def display_image(data):
                 data = data.split(",")[1]
             st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
         else:
-            st.error("图片数据格式不支持")
+            st.error("图片格式不支持")
     except Exception as e:
         st.error(f"图片解析失败: {e}")
 
@@ -67,86 +66,51 @@ class JewelryAIEngineV48:
         }
 
     # 商品/模特图生成
-    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area):
+    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
         mid = ALL_DRAWING_MODELS.get(mid_key)
         if not file:
-            log_area.error("未上传原图")
+            if log_area: log_area.error("未上传原图")
             return None
-
-        log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
+        if log_area: log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
 
-        # 自动生成 Prompt
-        if p_type == "商品图":
-            prompt = f"""
-请生成一张高端饰品商品图，饰品类型为 {category}。
-背景要求：
-- 核心配色：暖色调莫兰迪色系或中性肤色系，米色/奶油色为主，辅以淡橙/香槟粉或丝绸香槟金
-- 材质：哑光背景纸/卡纸，丝绸/缎面布料或皮革感纹理，质感高级
-- 几何道具：几何立方体、多边形台子，金属线条支架，增加层次和立体感
-- 灯光：大面积柔光，从斜上方45°打入，阴影柔和
-- 拍摄角度：平铺俯拍或侧斜角45°，突出饰品主体
-- 饰品摆放：{category}角度合理，避免违反重力，悬空自然
-- 风格：8K超高清，高端奢华饰品风格
-"""
-        elif p_type == "模特图":
-            if gender == "男性":
-                prompt = f"""
-请生成一张高端男士饰品模特图，模特肤色小麦色/古铜色，皮肤纹理清晰，胡须修剪整齐。
-服装：黑色圆领针织衫或西装。饰品为 {category}。
-背景与布景：
-- 色调：深米色、大地色或灰褐色
-- 虚化：模特距离背景一定距离，背景渐变虚化，无杂物干扰
-- 灯光：侧逆光或45°侧光，突出颈部线条和首饰高光
-- 构图：大特写（嘴部以下到胸部以上）
-- 动作：手拉链条，链条弧线自然引导视线到吊坠
-- 光影：反光板补光，避免阴影过黑，高光点缀吊坠
-- 后期调色：锐度适中提升首饰与胡须质感，对比拉高，背景增加暖色感
-- 风格：高端、沉稳、男性时尚感，8K超高清摄影风格
-"""
-            else:  # 女性
-                prompt = f"""
-请生成一张高端女模特饰品图，模特皮肤水光肌，白皙透亮，柔和妆容，嘴唇淡粉/豆沙色，指甲裸色/透粉色。
-发型自然微卷或深色散落碎发。服装：纯白或米白色。饰品为 {category}。
-背景与布景：
-- 色彩：低饱和粉色、浅米色或纯白
-- 光影：极度柔和弥散光，几乎无明显阴影
-- 构图：大面积留白，展示颈部和肩部皮肤
-- 动作：轻拨领口或靠近链条，侧头展示链条弧度
-- 布景：模拟窗边柔光，反光板放置在下巴下方消除阴影
-- 拍摄参数：85mm f/1.8或100mm Macro，大光圈虚化背景
-- 风格：精致柔美、突出首饰细节，8K超高清摄影风格
-"""
+        v_payload = {
+            "model": "google/gemini-3.1-flash-image-preview",
+            "messages": [
+                {"role": "user", "content": [
+                    {"type": "text", "text": f"生成 {p_type} 图，标题：{title}，饰品类型：{category}，目标人群：{gender}"},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{b64_in}"}}
+                ]}
+            ]
+        }
+        v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
+        if log_area: log_area.info(f"初步生成返回: {str(v_res_json)[:200]}")
+
+        v_desc = v_res_json.get('choices', [{}])[0].get('message', {}).get('content', f"{p_type} {category} image")
+        prompt = f"{p_type} photography. {v_desc}. 8k, 高端饰品风格，背景色和道具符合要求。"
 
         res_payload = {
             "model": mid,
             "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
             "modalities": ["image"]
         }
+        time.sleep(1)
+        res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
+        if log_area: log_area.info(f"{p_type} 最终返回: {str(res_json)[:200]}")
 
-        try:
-            res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
-            choices = res_json.get("choices", [{}])
-            msg = choices[0].get("message", {})
-            img_list = msg.get("images", [])
-            if img_list:
-                log_area.success(f"✅ {p_type} 生成成功")
-                return img_list[0]
-            content = msg.get("content", "")
-            if content.startswith("data:image"):
-                log_area.success(f"✅ {p_type} 生成成功")
-                return content
-            log_area.error(f"❌ {p_type} 生成失败：返回内容非图片")
-            return None
-        except Exception as e:
-            log_area.error(f"❌ {p_type} 生成失败: {e}")
-            return None
+        choices = res_json.get('choices', [{}])
+        msg = choices[0].get('message', {})
+        img_list = msg.get('images', [])
+        result = img_list[0] if img_list else None
+        if result and log_area: log_area.info(f"{p_type} 生成成功，数据类型: {type(result)}")
+        if result is None and log_area: log_area.error(f"{p_type} 生成失败")
+        return result
 
     # 标题生成
-    def run_seo(self, model_id, title, market, gender, category, log_area):
-        log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
+    def run_seo(self, model_id, title, market, gender, category, log_area=None):
+        if log_area: log_area.info(f"⏳ 标题生成中... {datetime.now().strftime('%H:%M:%S')}")
         seo_prompt = f"""
-请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按推荐级别排序。
+请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按点击率和浏览量综合排序。
 输出格式：
 推荐标题一：****
 中文翻译：****
@@ -158,13 +122,16 @@ class JewelryAIEngineV48:
 中文翻译：****
 推荐理由：****
 """
-        res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers,
-                             {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]}, timeout=60)
+        res_json = safe_post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            self.headers,
+            {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
+            timeout=60
+        )
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        if content:
-            log_area.success("✅ 标题生成完成")
-        else:
-            log_area.error("❌ 标题生成失败")
+        if log_area: log_area.info(f"标题生成返回: {str(content)[:200]}")
+        if content and log_area: log_area.success("✅ 标题生成完成")
+        elif log_area: log_area.error("❌ 标题生成失败")
         return content.strip()
 
 # ==========================================
@@ -173,7 +140,7 @@ class JewelryAIEngineV48:
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
 engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
 
-# session_state 初始化
+# session_state
 for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
@@ -188,7 +155,6 @@ with st.sidebar:
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
     seo_model = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
     img_model = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=0)
-
     if st.button("重置"):
         u_title = ""
         u_file = None
@@ -207,7 +173,7 @@ btn_mod = c3.button("👤 生成模特图")
 # 日志区
 log_area = st.empty()
 
-# 生成标题
+# --- 生成标题 ---
 if btn_seo:
     st.session_state.seo_result = engine.run_seo(seo_model, u_title, u_market, u_gender, u_category, log_area)
 
@@ -236,15 +202,36 @@ if st.session_state.seo_result:
             """, unsafe_allow_html=True
         )
 
-# 生成商品图 / 模特图
+# --- 生成商品图/模特图 ---
 if (btn_prod or btn_mod) and u_file:
     p_img = m_img_res = None
+    # 商品图
     if btn_prod:
-        st.session_state.p_img = engine.run_smart_gen(img_model, "商品图", u_title, u_gender, u_category, u_market, u_file, log_area)
-    if btn_mod:
-        st.session_state.m_img = engine.run_smart_gen(img_model, "模特图", u_title, u_gender, u_category, u_market, u_file, log_area)
+        log_area.info("开始生成商品图...")
+        p_img = engine.run_smart_gen(img_model, "商品图", u_title, u_gender, u_category, u_market, u_file, log_area)
+        if p_img:
+            log_area.success("商品图生成完成")
+        else:
+            log_area.error("商品图生成失败")
+        st.session_state.p_img = p_img
+        log_area.info(f"返回数据类型: {type(p_img)}")
+        if isinstance(p_img, str) and not p_img.startswith("data:image"):
+            log_area.warning(f"注意：字符串返回，但不是 base64 图片，内容摘要: {p_img[:100]}")
 
-# Tabs 显示图片
+    # 模特图
+    if btn_mod:
+        log_area.info("开始生成模特图...")
+        m_img_res = engine.run_smart_gen(img_model, "模特图", u_title, u_gender, u_category, u_market, u_file, log_area)
+        if m_img_res:
+            log_area.success("模特图生成完成")
+        else:
+            log_area.error("模特图生成失败")
+        st.session_state.m_img = m_img_res
+        log_area.info(f"返回数据类型: {type(m_img_res)}")
+        if isinstance(m_img_res, str) and not m_img_res.startswith("data:image"):
+            log_area.warning(f"注意：字符串返回，但不是 base64 图片，内容摘要: {m_img_res[:100]}")
+
+# --- Tabs 显示图片 ---
 if st.session_state.p_img or st.session_state.m_img:
     tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
     with tab_prod:
