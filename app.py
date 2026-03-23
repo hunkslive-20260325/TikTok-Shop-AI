@@ -13,7 +13,6 @@ import time
 ALL_DRAWING_MODELS = {
     "google/gemini-3.1-flash-image-preview": "google/gemini-3.1-flash-image-preview"
 }
-
 ALL_TEXT_MODELS = ["openrouter/auto"]
 
 # ------------------------------------------
@@ -28,7 +27,7 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": "请求失败"}
 
 # ------------------------------------------
-# 显示图片函数（统一处理 URL 或 Base64）
+# 显示图片函数
 # ------------------------------------------
 def display_image(data):
     if not data:
@@ -36,7 +35,8 @@ def display_image(data):
         return
     if isinstance(data, dict) and "url" in data:
         st.image(data["url"], use_column_width=True)
-    elif isinstance(data, str):
+        return
+    if isinstance(data, str):
         b64_data = data
         if data.startswith("data:image"):
             b64_data = data.split(",")[1]
@@ -74,7 +74,7 @@ class JewelryAIEngine:
             "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
             "modalities": ["image"]
         }
-        time.sleep(1)  # 模拟进度
+        time.sleep(1)  # 模拟生成进度
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
         choices = res_json.get('choices', [{}])
         msg = choices[0].get('message', {})
@@ -102,7 +102,7 @@ class JewelryAIEngine:
 中文翻译：****
 推荐理由：****
 """
-        time.sleep(1)  # 模拟进度
+        time.sleep(1)  # 模拟生成进度
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers,
                              {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]}, timeout=60)
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
@@ -158,7 +158,7 @@ if st.session_state.seo_result:
     tab_seo_area.markdown("### 优化标题")
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
-    colors = ["#f0f8ff","#d0f0c0","#fffacd"]  # 更易阅读的柔和背景色
+    colors = ["#f0f8ff","#d0f0c0","#fffacd"]  # 柔和背景色
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#fffacd"
         st.markdown(
