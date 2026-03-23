@@ -5,6 +5,7 @@ from PIL import Image
 from io import BytesIO
 from datetime import datetime
 import re
+import json
 
 # ==========================================
 # 模型库
@@ -48,7 +49,7 @@ def display_image(data):
                 data = data.split(",")[1]
             st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
         else:
-            st.error("图片数据格式不支持")
+            st.error(f"图片数据格式不支持: {type(data)}")
     except Exception as e:
         st.error(f"图片解析失败: {e}")
 
@@ -70,6 +71,7 @@ class JewelryAIEngine:
         if not file:
             if log_area: log_area.error("未上传原图")
             return None
+
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
         if log_area: log_area.info(f"⏳ {p_type} 生成中... {datetime.now().strftime('%H:%M:%S')}")
 
@@ -84,26 +86,30 @@ class JewelryAIEngine:
         }
 
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload, timeout=120)
-        if log_area: log_area.info(f"{p_type} 返回原始 JSON:\n{res_json}")
+        if log_area: 
+            log_area.text("🔹 原始返回 JSON:\n" + json.dumps(res_json, indent=2, ensure_ascii=False))
 
         # 尝试提取图片数据
         result = None
         try:
+            # Gemini-2.5/3.1 返回 choices -> message -> images 列表
             if isinstance(res_json, dict):
-                if res_json.get("type") == "image_url":
-                    result = res_json["image_url"]["url"]
-                else:
-                    choices = res_json.get("choices", [{}])
-                    msg = choices[0].get("message", {})
-                    img_list = msg.get("images", [])
-                    if img_list:
-                        result = img_list[0]
-            elif isinstance(res_json, list) and len(res_json) > 1:
-                choices = res_json[1].get("choices", [{}])
+                choices = res_json.get("choices", [{}])
                 msg = choices[0].get("message", {})
-                content = msg.get("content")
-                if content and content.startswith("data:image"):
-                    result = content
+                img_list = msg.get("images", [])
+                if img_list:
+                    result = img_list[0]
+                # 如果直接返回 data:image 也处理
+                elif msg.get("content") and msg["content"].startswith("data:image"):
+                    result = msg["content"]
+            # openrouter/auto 或列表返回
+            elif isinstance(res_json, list) and len(res_json) > 0:
+                for item in res_json:
+                    choices = item.get("choices", [{}])
+                    msg = choices[0].get("message", {})
+                    if msg.get("content") and msg["content"].startswith("data:image"):
+                        result = msg["content"]
+                        break
         except Exception as e:
             if log_area: log_area.error(f"{p_type} 提取图片异常: {e}")
 
@@ -135,7 +141,7 @@ class JewelryAIEngine:
             {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
             timeout=60
         )
-        if log_area: log_area.info(f"标题生成返回 JSON:\n{res_json}")
+        if log_area: log_area.text("🔹 标题生成返回 JSON:\n" + json.dumps(res_json, indent=2, ensure_ascii=False))
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
         if content:
             if log_area: log_area.success("✅ 标题生成完成")
@@ -164,11 +170,8 @@ with st.sidebar:
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"], index=0)
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
-
-    # 模型选择
     seo_model = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
     img_model = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=1)
-
     if st.button("重置"):
         u_title = ""
         u_file = None
@@ -190,19 +193,12 @@ btn_mod = c3.button("👤 生成模特图")
 tab_seo_area = st.empty()
 if btn_seo:
     log_area = tab_seo_area
-    st.session_state.seo_result = engine.run_seo(
-        model_id=seo_model,
-        title=u_title,
-        market=u_market,
-        gender=u_gender,
-        category=u_category,
-        log_area=log_area
-    )
+    st.session_state.seo_result = engine.run_seo(seo_model, u_title, u_market, u_gender, u_category, log_area)
 
 if st.session_state.seo_result:
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
-    colors = ["#f0a500","#f4c542","#fde8a9"]  # 暖色调渐变
+    colors = ["#f0a500","#f4c542","#fde8a9"]
     st.subheader("优化标题")
     for idx,(title,cn,reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "#fde8a9"
