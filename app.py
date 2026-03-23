@@ -4,6 +4,7 @@ import base64
 from PIL import Image
 from io import BytesIO
 from datetime import datetime
+import re
 
 # ==========================================
 # 模型库
@@ -50,7 +51,7 @@ def translate_text(text, target_lang='zh-CN'):
     except:
         return text
 
-# 图片显示工具
+# 显示图片
 def display_image(data):
     if isinstance(data, dict) and "url" in data:
         st.image(data["url"], use_column_width=True)
@@ -76,7 +77,6 @@ class JewelryAIEngineV48:
         mid = ALL_DRAWING_MODELS.get(mid_key)
         b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
 
-        # 提取形状材质
         v_payload = {
             "model": "google/gemini-3.1-flash-image-preview",
             "messages": [
@@ -104,7 +104,7 @@ class JewelryAIEngineV48:
         return img_list[0] if img_list else None
 
     # 生成三条推荐标题
-    def run_seo(self, model_id, u_title, u_cat, u_market, progress_callback=None):
+    def run_seo(self, model_id, u_title, u_market, progress_callback=None):
         seo_prompt = f"""
 针对 {u_market} 市场优化标题 '{u_title}'，参考 TikTok 和 Amazon 热搜词。
 请输出三条推荐标题，按点击率和浏览综合评估排序。
@@ -124,14 +124,12 @@ class JewelryAIEngineV48:
 """
         if progress_callback:
             progress_callback(1,3,"正在生成标题...")
-
         res_json = safe_post(
             "https://openrouter.ai/api/v1/chat/completions",
             self.headers,
             {"model": model_id, "messages":[{"role":"user","content":seo_prompt}]},
             timeout=60
         )
-
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
         if progress_callback:
             progress_callback(3,3,"标题生成完成")
@@ -141,10 +139,10 @@ class JewelryAIEngineV48:
 st.set_page_config(page_title="饰品专家 V48", layout="wide")
 engine = JewelryAIEngineV48(st.secrets.get("OPENROUTER_API_KEY", ""))
 
-# session_state 初始化
-for key, default in {"p_img": None, "m_img": None, "seo_result": None}.items():
+# session_state
+for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
-        st.session_state[key] = default
+        st.session_state[key] = None
 
 # Sidebar
 with st.sidebar:
@@ -155,41 +153,55 @@ with st.sidebar:
     u_cat = st.selectbox("2. 类型", ["项链", "耳饰", "戒指", "手链", "套装"])
     u_market = st.selectbox("3. 市场", ["东南亚", "北美", "欧洲"])
     u_gender = st.radio("4. 性别", ["女性", "男性"], horizontal=True)
-    u_file = st.file_uploader("📸 上传原图", type=["jpg", "png", "jpeg"])
+    u_file = st.file_uploader("📸 上传原图", type=["jpg","png","jpeg"])
     if u_file:
         st.image(u_file, use_column_width=True)
 
 st.title("💎 TikTok Shop 饰品生成 V48")
 
-c1, c2, c3 = st.columns(3)
+c1,c2,c3 = st.columns(3)
 btn_seo = c1.button("✨ 生成标题")
 btn_prod = c2.button("🖼️ 生成商品图")
 btn_mod = c3.button("👤 生成模特图")
 
-# 进度显示函数
+# 进度显示
 progress_text = st.empty()
 progress_bar = st.progress(0)
-def progress_callback(current, total, msg):
+def progress_callback(current,total,msg):
     progress_text.text(f"{msg} ({current}/{total}) - {datetime.now().strftime('%H:%M:%S')}")
-    progress_bar.progress(current / total)
+    progress_bar.progress(current/total)
 
 # --- SEO ---
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(m_txt, u_title, u_cat, u_market, progress_callback=progress_callback)
+    st.session_state.seo_result = engine.run_seo(m_txt, u_title, u_market, progress_callback)
     progress_text.text("✅ 标题生成完成")
     progress_bar.empty()
 
+# 显示三条标题，绿色渐变+一键复制
 if st.session_state.seo_result:
-    st.markdown(st.session_state.seo_result)
+    pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
+    matches = re.findall(pattern, st.session_state.seo_result, re.DOTALL)
+    if matches:
+        colors = ["#b7e4c7","#d8f3dc","#edf7ed"]
+        for idx,(title,cn,reason) in enumerate(matches):
+            color = colors[idx] if idx < len(colors) else "#edf7ed"
+            st.markdown(
+                f"""
+                <div style="background-color:{color}; padding:15px; border-radius:10px; margin-bottom:10px">
+                <b>推荐标题 {idx+1}:</b> {title}<br>
+                <b>中文翻译:</b> {cn}<br>
+                <b>推荐理由:</b> {reason}<br>
+                </div>
+                """,unsafe_allow_html=True
+            )
+            st.code(f"{title}\n{cn}\n{reason}",language="")
 
 # --- 商品图 ---
 if btn_prod and u_file:
-    img = engine.run_smart_gen(m_img, "product", u_cat, u_market, u_gender, u_file)
-    if img:
-        display_image(img)
+    img = engine.run_smart_gen(m_img,"product",u_cat,u_market,u_gender,u_file)
+    if img: display_image(img)
 
 # --- 模特图 ---
 if btn_mod and u_file:
-    img = engine.run_smart_gen(m_img, "model", u_cat, u_market, u_gender, u_file)
-    if img:
-        display_image(img)
+    img = engine.run_smart_gen(m_img,"model",u_cat,u_market,u_gender,u_file)
+    if img: display_image(img)
