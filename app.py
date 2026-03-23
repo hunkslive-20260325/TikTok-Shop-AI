@@ -37,18 +37,24 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": str(e)}
 
 # ------------------------------------------
-# 显示图片（支持 base64）- 新版本
+# 显示图片（支持 base64 和嵌套 image_url）
 # ------------------------------------------
 def display_image(data):
     """
-    显示图片，支持：
-    - URL (dict 包含 url)
-    - data:image/base64
-    - 纯 base64 字符串
+    显示图片：
+    支持：
+    - dict 包含 "url" 或 "image_url": {"url": ...}
+    - base64 字符串
     """
     try:
-        if isinstance(data, dict) and "url" in data:
-            st.image(data["url"], use_column_width=True)
+        if isinstance(data, dict):
+            if "url" in data:
+                st.image(data["url"], use_column_width=True)
+            elif "image_url" in data and "url" in data["image_url"]:
+                st.image(data["image_url"]["url"], use_column_width=True)
+            else:
+                st.error("⚠️ 图片数据格式不支持")
+                st.json(data)
         elif isinstance(data, str):
             if data.startswith("data:image"):
                 header, data = data.split(",", 1)
@@ -58,7 +64,8 @@ def display_image(data):
                 image = image.convert("RGB")
             st.image(image, use_column_width=True)
         else:
-            st.error("图片数据格式不支持")
+            st.error("⚠️ 图片数据格式不支持")
+            st.json(data)
     except Exception as e:
         st.error(f"图片解析失败: {e}")
         if isinstance(data, str):
@@ -102,10 +109,14 @@ class JewelryAIEngineV48:
             "modalities": ["image"]
         }
         res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, res_payload, timeout=120)
+
         choices = res_json.get('choices', [{}])
         msg = choices[0].get('message', {})
         img_list = msg.get('images', [])
-        return img_list[0] if img_list else res_json
+        if img_list and isinstance(img_list, list):
+            return img_list[0]  # 返回第一个图片
+        else:
+            return None, res_json  # 返回失败信息方便调试
 
     def run_seo(self, model_id, title, market, gender, category):
         seo_prompt = f"""
@@ -197,47 +208,36 @@ if (btn_prod or btn_mod) and u_file:
                 u_image_model, "商品图", u_title, u_gender, u_category, u_market, u_file
             )
             st.session_state.p_img = p_img
-            if isinstance(p_img, str) or (isinstance(p_img, dict) and "url" in p_img):
+            if p_img:
                 log_area.success("✅ 商品图生成成功")
             else:
                 log_area.error("❌ 商品图生成失败")
-                st.json(p_img)
 
         if btn_mod:
             log_area.info("⏳ 模特图生成中...")
-            m_img_res = engine.run_smart_gen(
+            m_img = engine.run_smart_gen(
                 u_image_model, "模特图", u_title, u_gender, u_category, u_market, u_file
             )
-            st.session_state.m_img = m_img_res
-            if isinstance(m_img_res, str) or (isinstance(m_img_res, dict) and "url" in m_img_res):
+            st.session_state.m_img = m_img
+            if m_img:
                 log_area.success("✅ 模特图生成成功")
             else:
                 log_area.error("❌ 模特图生成失败")
-                st.json(m_img_res)
+
     except Exception as e:
         log_area.error(f"生成图片时发生错误: {e}")
+        st.exception(e)
 
-# --- Tabs 显示图片 ---
+# Tabs 显示图片
 tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
 with tab_prod:
     if st.session_state.p_img:
-        st.markdown(
-            """
-            <div style="padding:10px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.1); background:#fff;">
-            """, unsafe_allow_html=True)
         display_image(st.session_state.p_img)
-        st.markdown("</div>", unsafe_allow_html=True)
-
 with tab_model:
     if st.session_state.m_img:
-        st.markdown(
-            """
-            <div style="padding:10px; border-radius:15px; box-shadow:0 4px 12px rgba(0,0,0,0.1); background:#fff;">
-            """, unsafe_allow_html=True)
         display_image(st.session_state.m_img)
-        st.markdown("</div>", unsafe_allow_html=True)
 
-# --- 显示优化标题 ---
+# 显示优化标题
 if st.session_state.seo_result and isinstance(st.session_state.seo_result, str):
     pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
     matches = re.findall(pattern, st.session_state.seo_result + "\n", re.DOTALL)
@@ -246,7 +246,6 @@ if st.session_state.seo_result and isinstance(st.session_state.seo_result, str):
         "linear-gradient(90deg, #f4c542, #fde8a9)", 
         "linear-gradient(90deg, #fde8a9, #fff4cc)"
     ]
-    
     st.subheader("✨ 优化标题")
     for idx, (title, cn, reason) in enumerate(matches[:3]):
         color = colors[idx] if idx < len(colors) else "linear-gradient(90deg, #fde8a9, #fff4cc)"
