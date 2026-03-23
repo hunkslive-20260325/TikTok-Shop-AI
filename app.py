@@ -5,19 +5,22 @@ from PIL import Image
 from io import BytesIO
 
 # ==========================================
-# 🛡️ 全局静态模型库
+# 🛡️ 全局静态模型库（已按性价比优先排序）
 # ==========================================
 ALL_DRAWING_MODELS = {
-    "openrouter/auto": "openrouter/auto",
+    "openrouter/auto": "openrouter/auto",  # 商品图默认首选
+    "google/gemini-3.1-flash-image-preview": "google/gemini-3.1-flash-image-preview",  # 模特图
     "google/gemini-2.5-flash-image": "google/gemini-2.5-flash-image",
-    "google/gemini-3.1-flash-image-preview": "google/gemini-3.1-flash-image-preview",
     "openai/gpt-5-image": "openai/gpt-5-image",
     "black-forest-labs/flux.2-pro": "black-forest-labs/flux.2-pro"
 }
 
 ALL_TEXT_MODELS = [
-    "deepseek/deepseek-v3.2", "deepseek/deepseek-chat", "openai/gpt-5.4",
-    "google/gemini-3.1-flash-image-preview", "openrouter/auto"
+    "deepseek/deepseek-v3.2",  # 标题优化首选
+    "deepseek/deepseek-chat",
+    "openai/gpt-5.4",
+    "google/gemini-3.1-flash-image-preview",
+    "openrouter/auto"
 ]
 
 # ==========================================
@@ -62,11 +65,12 @@ class JewelryAIEngineV47:
         }
         v_res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, v_payload, timeout=60)
         v_desc = v_res_json.get('choices', [{}])[0].get('message', {}).get('content', f"Commercial {cat} jewelry")
-        log_area.info(f"⏳ 正在通过 {mid_key} 渲染...")
+        log_area.info("✅ 原图编码完成")
 
+        log_area.info(f"⏳ 渲染 {mid_key} 中...")
         prompt = f"Commercial jewelry photography. {v_desc}. Background: Morandi tones. 8k." \
             if p_type == "product" else f"Fashion photography. {gen} model wearing {v_desc}. 8k."
-
+        
         res_payload = {
             "model": mid,
             "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}]}],
@@ -77,10 +81,19 @@ class JewelryAIEngineV47:
             log_area.error(res_json["error"])
             return None
 
-        with st.expander("📄 查看 API 原始返参 (JSON)"):
-            st.json(res_json)
+        log_area.success("✅ 渲染完成")
 
-        # 安全提取图片
+        # 简化日志显示 JSON
+        with st.expander("📄 API 简要返回"):
+            summary = {}
+            if 'choices' in res_json:
+                choice = res_json['choices'][0]
+                if 'message' in choice:
+                    msg = choice['message']
+                    summary['text'] = msg.get('content', '')
+                    summary['images'] = [img.get('url') for img in msg.get('images', []) if 'url' in img]
+            st.json(summary)
+
         choices = res_json.get('choices', [{}])
         msg = choices[0].get('message', {})
         img_list = msg.get('images', [])
@@ -98,8 +111,17 @@ class JewelryAIEngineV47:
         if "error" in res_json:
             log_area.error(res_json["error"])
             return f"Commercial {u_cat} jewelry"
-        with st.expander("📄 查看 API 原始返参 (JSON)"):
-            st.json(res_json)
+        log_area.success("✅ 标题优化完成")
+
+        with st.expander("📄 API 简要返回"):
+            summary = {}
+            if 'choices' in res_json:
+                choice = res_json['choices'][0]
+                if 'message' in choice:
+                    msg = choice['message']
+                    summary['text'] = msg.get('content', '')
+            st.json(summary)
+
         return res_json.get('choices', [{}])[0].get('message', {}).get('content', f"Commercial {u_cat} jewelry")
 
 # ==========================================
@@ -119,7 +141,7 @@ def display_image(data):
 # ==========================================
 # 🖥️ Streamlit UI
 # ==========================================
-st.set_page_config(page_title="饰品专家 V47.7", layout="wide")
+st.set_page_config(page_title="饰品专家 V47.7 精简日志版", layout="wide")
 engine = JewelryAIEngineV47(st.secrets.get("OPENROUTER_API_KEY", ""))
 
 # session_state 初始化
@@ -134,8 +156,8 @@ with st.sidebar:
     except:
         st.subheader("💎 AM JEWELRY")
     st.markdown("---")
-    m_txt = st.selectbox("文案/标题模型", ALL_TEXT_MODELS) 
-    m_img = st.selectbox("图像渲染模型", list(ALL_DRAWING_MODELS.keys())) 
+    m_txt = st.selectbox("文案/标题模型", ALL_TEXT_MODELS, index=0)
+    m_img = st.selectbox("图像渲染模型", list(ALL_DRAWING_MODELS.keys()), index=0)
     u_title = st.text_input("1. 原始标题", "心形项链")
     u_cat = st.selectbox("2. 类型", ["项链", "耳饰", "戒指", "手链", "套装"])
     u_market = st.selectbox("3. 市场", ["东南亚", "北美", "欧洲"])
@@ -145,7 +167,7 @@ with st.sidebar:
         st.image(u_file, use_column_width=True)
 
 # Main
-st.title("💎 TikTok Shop 饰品 (V47.7)")
+st.title("💎 TikTok Shop 饰品 (V47.7 精简日志版)")
 c1, c2, c3 = st.columns(3)
 btn_seo = c1.button("✨ 标题 SEO 优化")
 btn_prod = c2.button("🖼️ 商品图优化")
@@ -160,7 +182,6 @@ with tab_seo:
         with st.spinner("⏳ 正在生成标题..."):
             res = engine.run_seo(m_txt, u_title, u_cat, u_market, log_seo)
             st.session_state.seo_txt = res
-            log_seo.success("✅ 成功！")
     if st.session_state.seo_txt:
         st.markdown(st.session_state.seo_txt)
 
@@ -168,11 +189,12 @@ with tab_seo:
 with tab_prod:
     log_prod = st.empty()
     if btn_prod:
-        if not u_file: st.warning("请上传图片"); st.stop()
+        if not u_file:
+            st.warning("请上传图片")
+            st.stop()
         with st.spinner("⏳ 正在生成商品图..."):
             res = engine.run_smart_gen(m_img, "product", u_cat, u_market, u_gender, u_file, log_prod)
-            if res: st.session_state.p_img = res; log_prod.success("✅ 成功！")
-            else: log_prod.error("❌ 失败")
+            st.session_state.p_img = res
     if st.session_state.p_img:
         display_image(st.session_state.p_img)
 
@@ -180,10 +202,11 @@ with tab_prod:
 with tab_mod:
     log_mod = st.empty()
     if btn_mod:
-        if not u_file: st.warning("请上传图片"); st.stop()
+        if not u_file:
+            st.warning("请上传图片")
+            st.stop()
         with st.spinner("⏳ 正在生成模特图..."):
             res = engine.run_smart_gen(m_img, "model", u_cat, u_market, u_gender, u_file, log_mod)
-            if res: st.session_state.m_img = res; log_mod.success("✅ 成功！")
-            else: log_mod.error("❌ 失败")
+            st.session_state.m_img = res
     if st.session_state.m_img:
         display_image(st.session_state.m_img)
