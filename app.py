@@ -33,8 +33,8 @@ def safe_post(url, headers, json_data, timeout=60):
         res = requests.post(url, headers=headers, json=json_data, timeout=timeout)
         res.raise_for_status()
         return res.json()
-    except:
-        return {"error": "请求失败"}
+    except Exception as e:
+        return {"error": str(e)}
 
 # ------------------------------------------
 # 显示图片
@@ -43,9 +43,13 @@ def display_image(data):
     if isinstance(data, dict) and "url" in data:
         st.image(data["url"], use_column_width=True)
     elif isinstance(data, str):
-        if data.startswith("data:image"):
-            data = data.split(",")[1]
-        st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
+        try:
+            if data.startswith("data:image"):
+                data = data.split(",")[1]
+            st.image(Image.open(BytesIO(base64.b64decode(data))), use_column_width=True)
+        except Exception as e:
+            st.error(f"图片解析失败: {e}")
+            st.json(data)
 
 # ==========================================
 # AI 引擎
@@ -87,7 +91,7 @@ class JewelryAIEngineV48:
         choices = res_json.get('choices', [{}])
         msg = choices[0].get('message', {})
         img_list = msg.get('images', [])
-        return img_list[0] if img_list else None
+        return img_list[0] if img_list else res_json  # 返回调试信息
 
     # 标题生成
     def run_seo(self, model_id, title, market, gender, category):
@@ -111,7 +115,7 @@ class JewelryAIEngineV48:
             timeout=60
         )
         content = res_json.get('choices',[{}])[0].get('message',{}).get('content', "")
-        return content.strip()
+        return content.strip() if content else res_json  # 返回调试信息
 
 # ==========================================
 # Streamlit UI
@@ -158,63 +162,44 @@ btn_mod = c3.button("👤 生成模特图")
 
 # --- 生成标题 ---
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(
-        model_id=u_text_model,  # 使用选择的标题生成模型
-        title=u_title,
-        market=u_market,
-        gender=u_gender,
-        category=u_category
-    )
-
-if st.session_state.seo_result:
-    pattern = r"推荐标题[一二三]：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)\n"
-    matches = re.findall(pattern, st.session_state.seo_result+"\n", re.DOTALL)
-    colors = ["#f0a500","#f4c542","#fde8a9"]  # 暖色调渐变
-    st.subheader("优化标题")
-    for idx,(title,cn,reason) in enumerate(matches[:3]):
-        color = colors[idx] if idx < len(colors) else "#fde8a9"
-        st.markdown(
-            f"""
-            <div style="
-                background-color:{color};
-                padding:15px;
-                border-radius:12px;
-                margin-bottom:10px;
-                box-shadow: 1px 1px 6px rgba(0,0,0,0.2);
-            ">
-                <div style="color:#333; font-size:18px; font-weight:bold;">{title}</div>
-                <div style="margin-top:5px; color:#444; font-size:14px;">
-                    中文翻译: {cn}<br>
-                    推荐理由: {reason}
-                </div>
-            </div>
-            """, unsafe_allow_html=True
+    log_area = st.empty()
+    log_area.info("⏳ 标题生成中...")
+    try:
+        seo_result = engine.run_seo(
+            model_id=u_text_model,
+            title=u_title,
+            market=u_market,
+            gender=u_gender,
+            category=u_category
         )
+        st.session_state.seo_result = seo_result
+        if isinstance(seo_result, str):
+            log_area.success("✅ 标题生成完成")
+        else:
+            log_area.error("❌ 标题生成失败")
+            st.json(seo_result)
+    except Exception as e:
+        log_area.error(f"生成标题时发生错误: {e}")
 
 # --- 生成商品图/模特图 ---
 if (btn_prod or btn_mod) and u_file:
-    p_img = m_img_res = None
-    if btn_prod:
-        p_img = engine.run_smart_gen(
-            u_image_model,  # 使用选择的图片生成模型
-            "商品图",
-            u_title,u_gender,u_category,u_market,u_file
-        )
-        st.session_state.p_img = p_img
-    if btn_mod:
-        m_img_res = engine.run_smart_gen(
-            u_image_model,  # 使用选择的图片生成模型
-            "模特图",
-            u_title,u_gender,u_category,u_market,u_file
-        )
-        st.session_state.m_img = m_img_res
-
-# --- Tabs 显示图片 ---
-if st.session_state.p_img or st.session_state.m_img:
-    tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
-    with tab_prod:
-        if st.session_state.p_img:
-            display_image(st.session_state.p_img)
-    with tab_model:
-        if st.session_state.m_img:
-            display_image(st.session_state.m_img)
+    log_area = st.empty()
+    try:
+        if btn_prod:
+            log_area.info("⏳ 商品图生成中...")
+            p_img = engine.run_smart_gen(
+                u_image_model, "商品图", u_title, u_gender, u_category, u_market, u_file
+            )
+            st.session_state.p_img = p_img
+            if isinstance(p_img, str) or (isinstance(p_img, dict) and "url" in p_img):
+                log_area.success("✅ 商品图生成成功")
+            else:
+                log_area.error("❌ 商品图生成失败")
+                st.json(p_img)
+        if btn_mod:
+            log_area.info("⏳ 模特图生成中...")
+            m_img_res = engine.run_smart_gen(
+                u_image_model, "模特图", u_title, u_gender, u_category, u_market, u_file
+            )
+            st.session_state.m_img = m_img_res
+            if isinstance(m_img_res, str) or (isinstance(m_img_res, dict)
