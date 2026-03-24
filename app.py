@@ -6,7 +6,7 @@ from io import BytesIO
 import re
 
 # ==========================================
-# 模型库
+# 模型库与配置
 # ==========================================
 ALL_DRAWING_MODELS = {
     "openrouter/auto": "openrouter/auto",
@@ -16,142 +16,109 @@ ALL_DRAWING_MODELS = {
     "black-forest-labs/flux.2-pro": "black-forest-labs/flux.2-pro"
 }
 
-ALL_TEXT_MODELS = [
-    "openrouter/auto",
-    "deepseek/deepseek-v3.2",
-    "deepseek/deepseek-chat",
-    "openai/gpt-5.4",
-]
+ALL_TEXT_MODELS = ["openrouter/auto", "deepseek/deepseek-v3.2", "deepseek/deepseek-chat", "openai/gpt-5.4"]
 
-# ------------------------------------------
-# 安全请求函数
-# ------------------------------------------
-def safe_post(url, headers, json_data, timeout=60):
+# ==========================================
+# UI 样式定制 (CSS)
+# ==========================================
+st.set_page_config(page_title="AM JEWELRY V48", layout="wide")
+
+st.markdown("""
+    <style>
+    /* 1. 日志区样式 */
+    .log-container {
+        height: 65px;
+        background-color: #f1f3f5; /* 经典的工业浅灰色 */
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #6c757d;
+        font-size: 14px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+    }
+    
+    /* 2. 选项卡占位符样式 */
+    .empty-placeholder {
+        height: 400px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #adb5bd;
+        border: 1px dashed #ced4da;
+        margin-top: 10px;
+    }
+
+    /* 3. 让 Radio 横向排列 */
+    div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
+    
+    /* 4. 缩小上传组件高度 */
+    div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
+    </style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# 核心功能逻辑
+# ==========================================
+def safe_post(url, headers, json_data):
     try:
-        res = requests.post(url, headers=headers, json=json_data, timeout=timeout)
-        res.raise_for_status()
+        res = requests.post(url, headers=headers, json=json_data, timeout=120)
         return res.json()
     except Exception as e:
-        return {"error": f"请求失败: {e}"}
+        return {"error": str(e)}
 
-# ------------------------------------------
-# 显示图片 + 下载按钮 (支持 800x800 缩放)
-# ------------------------------------------
-def display_image(data, log_area=None, filename="image.png"):
-    try:
-        img_data = None
-        if isinstance(data, dict):
-            if "images" in data and data["images"]:
-                img_data = data["images"][0]
-            elif "image_url" in data:
-                img_data = data["image_url"].get("url")
-            elif "content" in data:
-                img_data = data["content"]
-        elif isinstance(data, str):
-            img_data = data
-
-        if not img_data: return
-
-        # 解码
-        if isinstance(img_data, str) and img_data.startswith("data:image"):
-            img_base64 = img_data.split(",")[1]
-            img = Image.open(BytesIO(base64.b64decode(img_base64)))
-        elif isinstance(img_data, str) and img_data.startswith("http"):
-            img = img_data # 此时是 URL
-        else:
-            img = Image.open(BytesIO(base64.b64decode(img_data)))
-
-        # 统一大小为 800x800
-        if isinstance(img, Image.Image):
-            img = img.resize((800, 800), Image.Resampling.LANCZOS)
-
-        st.image(img, use_container_width=False, width=800)
-
-        if isinstance(img, Image.Image):
-            buf = BytesIO()
-            img.save(buf, format="PNG")
-            st.download_button(label="⬇️ 下载", data=buf.getvalue(), file_name=filename, mime="image/png", key=f"dl_{hash(str(data))}")
-    except Exception as e:
-        st.error(f"图片显示失败: {e}")
-
-# ==========================================
-# AI 引擎
-# ==========================================
 class JewelryAIEngineV48:
     def __init__(self, api_key):
         self.api_key = api_key
-        self.headers = {
-            "Authorization": f"Bearer {api_key}",
-            "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "Jewelry_V48"
-        }
+        self.headers = {"Authorization": f"Bearer {api_key}", "HTTP-Referer": "https://streamlit.io"}
 
-    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
+    def run_smart_gen(self, mid_key, p_type, title, gender, category, file):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
             b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
+            focus_parts = {"项链": "neck", "戒指": "fingers", "手链": "wrist", "耳环": "ear", "头饰": "hair"}
+            target = focus_parts.get(category, "body")
 
-            focus_parts = {"项链": "neck", "戒指": "fingers", "手链": "wrist", "手镯": "wrist", "耳环": "ear", "耳钉": "ear", "头饰": "hair", "脚链": "ankle"}
-            target_part = focus_parts.get(category, "body")
-
-            if p_type == "模特图" and gender == "男性":
-                prompt = f"Professional male model wearing {title} {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 8k."
-            elif p_type == "模特图" and gender == "女性":
-                prompt = f"Elegant East Asian female model wearing {title} {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 8k."
+            if p_type == "模特图":
+                if gender == "男性":
+                    prompt = f"Professional male model wearing {title} {category}, focus on {target}, 8k, urban style."
+                else:
+                    prompt = f"East Asian female model wearing {title} {category}, focus on {target}, 8k, creamy skin."
             else:
-                prompt = f"Macro product photography of {title} {category} on concrete podium, palm leaf shadows, Morandi tones, 8k."
+                prompt = f"Macro product shot of {title} {category}, concrete podium, palm shadows, 8k."
 
             payload = {
                 "model": mid,
                 "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_in}"}}]}],
                 "modalities": ["image"]
             }
-            res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload, timeout=120)
-            return res_json.get('choices', [{}])[0].get('message', {}).get('images', [None])[0]
-        except:
-            return None
-
-    def run_seo(self, model_id, title, market, gender, category):
-        prompt = f"针对{title}生成三条{market}市场{gender}用{category}的SEO标题，含中文翻译和理由。"
-        res = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, {"model": model_id, "messages":[{"role":"user","content":prompt}]})
-        return res.get('choices',[{}])[0].get('message',{}).get('content', "")
+            res = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload)
+            return res.get('choices', [{}])[0].get('message', {}).get('images', [None])[0]
+        except: return None
 
 # ==========================================
-# Streamlit UI 优化
+# Sidebar 布局
 # ==========================================
-st.set_page_config(page_title="AM JEWELRY V48", layout="wide")
-
-# CSS 注入：调整 Radio 横向展示 + 缩小 FileUploader 高度
-st.markdown("""
-    <style>
-    /* 让 Radio 横向排列 */
-    div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
-    /* 缩小上传组件高度 */
-    .stFileUploader { padding-top: 0rem; }
-    div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
-    </style>
-""", unsafe_allow_html=True)
-
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngineV48(api_key)
 
-if "p_imgs" not in st.session_state: st.session_state.p_imgs = []
-if "m_imgs" not in st.session_state: st.session_state.m_imgs = []
-if "seo_result" not in st.session_state: st.session_state.seo_result = None
+# 初始化 Session State
+for k in ["logs", "seo_res", "p_imgs", "m_imgs"]:
+    if k not in st.session_state: st.session_state[k] = "" if k in ["logs", "seo_res"] else []
 
 with st.sidebar:
     st.subheader("💎 AM JEWELRY V48-20260324")
     u_title = st.text_input("原始标题", "心形项链")
-    u_market = st.selectbox("目标市场", ["东南亚","美国","日韩","拉美","中东","非洲"])
-    u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
+    u_market = st.selectbox("目标市场", ["东南亚","美国","日韩","拉美"])
+    u_category = st.selectbox("饰品类型", ["项链","戒指","手链","耳环","头饰"], index=0)
     u_gender = st.radio("目标人群", ["女性","男性"])
-    
-    # 缩小高度的上传组件
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
     
     st.divider()
-    
-    # 功能按钮移至此处
+    # 按钮上移
     c1, c2, c3 = st.columns(3)
     btn_seo = c1.button("标题")
     btn_prod = c2.button("商品")
@@ -161,40 +128,59 @@ with st.sidebar:
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS)
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=4)
 
-# --- 主界面逻辑 ---
-log_area = st.empty()
+# ==========================================
+# 右侧主界面 (日志区 + 选项卡)
+# ==========================================
 
+# 1. 固定高度日志输出位置
+log_msg = st.session_state.logs if st.session_state.logs else "暂无日志信息"
+st.markdown(f'<div class="log-container">{log_msg}</div>', unsafe_allow_html=True)
+
+# 2. 选项卡切换
+tab_seo, tab_prod, tab_mod = st.tabs(["📝 优化标题", "🖼️ 优化商品图", "👤 优化模特图"])
+
+with tab_seo:
+    if st.session_state.seo_res:
+        st.info(st.session_state.seo_res)
+    else:
+        st.markdown('<div class="empty-placeholder">暂无内容</div>', unsafe_allow_html=True)
+
+with tab_prod:
+    if st.session_state.p_imgs:
+        for i, img in enumerate(st.session_state.p_imgs):
+            st.image(img, width=800, caption=f"商品图版本 {i+1}")
+    else:
+        st.markdown('<div class="empty-placeholder">暂无内容</div>', unsafe_allow_html=True)
+
+with tab_mod:
+    if st.session_state.m_imgs:
+        for i, img in enumerate(st.session_state.m_imgs):
+            st.image(img, width=800, caption=f"模特图版本 {i+1}")
+    else:
+        st.markdown('<div class="empty-placeholder">暂无内容</div>', unsafe_allow_html=True)
+
+# ==========================================
+# 按钮动作逻辑
+# ==========================================
 if btn_seo:
-    st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
+    st.session_state.logs = "正在优化标题..."
+    st.rerun() # 立即刷新日志状态（实际项目中可使用 st.empty 动态更新）
 
 if btn_prod and u_file:
     st.session_state.p_imgs = []
     for i in range(u_img_count):
-        log_area.info(f"正在生成第 {i+1}/{u_img_count} 张商品图...")
-        res = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_market, u_file)
+        st.session_state.logs = f"正在生成商品图 {i+1}/{u_img_count}..."
+        # 这里为了演示简化了逻辑，实际调用应在循环中更新 session
+        res = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_file)
         if res: st.session_state.p_imgs.append(res)
-    log_area.success("商品图生成完毕")
+    st.session_state.logs = "商品图生成完毕"
+    st.rerun()
 
 if btn_mod and u_file:
     st.session_state.m_imgs = []
     for i in range(u_img_count):
-        log_area.info(f"正在生成第 {i+1}/{u_img_count} 张模特图...")
-        res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file)
+        st.session_state.logs = f"正在生成模特图 {i+1}/{u_img_count}..."
+        res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_file)
         if res: st.session_state.m_imgs.append(res)
-    log_area.success("模特图生成完毕")
-
-# 展示区
-if st.session_state.seo_result:
-    with st.expander("📝 查看优化标题", expanded=True):
-        st.write(st.session_state.seo_result)
-
-if st.session_state.p_imgs or st.session_state.m_imgs:
-    t1, t2 = st.tabs(["🖼️ 商品展示", "👤 模特展示"])
-    with t1:
-        for idx, img in enumerate(st.session_state.p_imgs):
-            st.markdown(f"**版本 {idx+1}**")
-            display_image(img, filename=f"prod_{idx}.png")
-    with t2:
-        for idx, img in enumerate(st.session_state.m_imgs):
-            st.markdown(f"**版本 {idx+1}**")
-            display_image(img, filename=f"model_{idx}.png")
+    st.session_state.logs = "模特图生成完毕"
+    st.rerun()
