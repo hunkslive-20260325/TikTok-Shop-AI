@@ -26,57 +26,46 @@ st.set_page_config(page_title="AM JEWELRY V48-20260324", layout="wide")
 
 st.markdown("""
     <style>
-    /* 升级版多行日志控制台 */
+    /* 1. 实时日志控制台样式 */
     .console-box {
-        height: 200px;
-        background-color: #212529; /* 深色工业背景 */
-        color: #00ff41; /* 经典黑客绿文字 */
-        border-radius: 5px;
-        padding: 12px;
-        font-family: 'Courier New', Courier, monospace;
+        height: 180px;
+        background-color: #1e1e1e;
+        color: #00e676; /* 工业绿 */
+        border-radius: 4px;
+        padding: 10px;
+        font-family: 'Consolas', 'Monaco', monospace;
         font-size: 13px;
         overflow-y: auto;
-        border: 1px solid #495057;
-        line-height: 1.5;
-        margin-bottom: 20px;
+        border: 1px solid #333;
+        margin-bottom: 10px;
+        line-height: 1.4;
     }
-    .log-time { color: #888; margin-right: 10px; }
-    .log-info { color: #0d6efd; }
-    .log-success { color: #28a745; }
-    .log-error { color: #dc3545; }
+    .log-entry { margin-bottom: 4px; border-bottom: 1px solid #2a2a2a; padding-bottom: 2px; }
+    .log-ts { color: #888; font-size: 11px; margin-right: 8px; }
+    .log-msg-info { color: #00e676; }
+    .log-msg-error { color: #ff5252; }
 
-    /* 选项卡占位符 */
+    /* 2. 占位符与侧边栏 */
     .empty-placeholder {
-        height: 300px;
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #adb5bd;
-        border: 1px dashed #ced4da;
+        height: 300px; background-color: #f8f9fa; border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        color: #adb5bd; border: 1px dashed #ced4da;
     }
-
-    /* 侧边栏布局 */
     div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
     div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 辅助函数：日志追加
+# 日志记录辅助函数
 # ==========================================
-def add_log(message, type="info"):
-    now = datetime.datetime.now().strftime("%H:%M:%S")
-    if "full_logs" not in st.session_state:
-        st.session_state.full_logs = []
-    
-    color_class = f"log-{type}"
-    log_entry = f'<div><span class="log-time">[{now}]</span><span class="{color_class}">{message}</span></div>'
-    st.session_state.full_logs.append(log_entry)
-    # 保持最近 50 条记录
-    if len(st.session_state.full_logs) > 50:
-        st.session_state.full_logs.pop(0)
+def write_log(message, is_error=False):
+    if "event_log" not in st.session_state:
+        st.session_state.event_log = []
+    ts = datetime.datetime.now().strftime("%H:%M:%S")
+    msg_class = "log-msg-error" if is_error else "log-msg-info"
+    log_html = f'<div class="log-entry"><span class="log-ts">[{ts}]</span><span class="{msg_class}">{message}</span></div>'
+    st.session_state.event_log.insert(0, log_html) # 最新的日志在最上面
 
 # ==========================================
 # 核心功能逻辑
@@ -117,8 +106,8 @@ api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngineV48(api_key)
 
 # 初始化 Session State
-if "full_logs" not in st.session_state: st.session_state.full_logs = ['<div><span class="log-time">[System]</span><span class="log-info">初始化完成，准备就绪。</span></div>']
-if "raw_response" not in st.session_state: st.session_state.raw_response = None
+if "event_log" not in st.session_state: st.session_state.event_log = []
+if "full_history_raw" not in st.session_state: st.session_state.full_history_raw = []
 if "seo_res" not in st.session_state: st.session_state.seo_res = ""
 if "p_imgs" not in st.session_state: st.session_state.p_imgs = []
 if "m_imgs" not in st.session_state: st.session_state.m_imgs = []
@@ -139,75 +128,73 @@ with st.sidebar:
 
 # --- 右侧布局 ---
 
-# 1. 扩容后的日志监控台
-log_html = f'<div class="console-box">{"".join(st.session_state.full_logs)}</div>'
-st.markdown(log_html, unsafe_allow_html=True)
+# 1. 顶部折叠日志区 (监控中心)
+with st.expander("🛠️ 系统运行日志与 API 监控 (Console)", expanded=True):
+    # 渲染控制台
+    log_content = "".join(st.session_state.event_log) if st.session_state.event_log else "<div>Waiting for command...</div>"
+    st.markdown(f'<div class="console-box">{log_content}</div>', unsafe_allow_html=True)
+    
+    # 打印原始返参历史
+    if st.session_state.full_history_raw:
+        st.write("**最新 API 响应报文 (JSON):**")
+        st.json(st.session_state.full_history_raw[0]) # 只显示最近的一次
 
-# 2. 原始返参 (Debug Mode)
-if st.session_state.raw_response:
-    with st.expander("🛠️ 查看最近一次 API 原始响应报文 (JSON)", expanded=False):
-        st.json(st.session_state.raw_response)
-
-# 3. 结果展示选项卡
+# 2. 结果选项卡
 t_seo, t_prod, t_mod = st.tabs(["📝 优化标题", "🖼️ 优化商品图", "👤 优化模特图"])
 
-# (展示逻辑保持不变，确保 2026 width 参数正确)
-def process_and_display(img_data, caption, idx):
+def render_image(img_data, cap, idx):
     try:
         if isinstance(img_data, str) and img_data.startswith("http"): target = img_data
         else:
             if isinstance(img_data, str) and "base64," in img_data: img_data = img_data.split("base64,")[1]
-            target = Image.open(BytesIO(base64.b64decode(img_bytes))).resize((800, 800), Image.Resampling.LANCZOS)
-        st.image(target, width=800, caption=caption)
-    except Exception as e: st.error(f"显示失败: {e}")
+            target = Image.open(BytesIO(base64.b64decode(img_data))).resize((800, 800), Image.Resampling.LANCZOS)
+        st.image(target, width=800, caption=cap)
+    except Exception as e: st.error(f"Render Error: {e}")
 
 with t_seo:
     if st.session_state.seo_res: st.info(st.session_state.seo_res)
-    else: st.markdown('<div class="empty-placeholder">暂无标题</div>', unsafe_allow_html=True)
+    else: st.markdown('<div class="empty-placeholder">No Data</div>', unsafe_allow_html=True)
 
 with t_prod:
     if st.session_state.p_imgs:
-        for i, img in enumerate(st.session_state.p_imgs): process_and_display(img, f"Prod_{i+1}", f"p_{i}")
-    else: st.markdown('<div class="empty-placeholder">暂无商品图</div>', unsafe_allow_html=True)
+        for i, img in enumerate(st.session_state.p_imgs): render_image(img, f"Prod_{i+1}", f"p_{i}")
+    else: st.markdown('<div class="empty-placeholder">No Data</div>', unsafe_allow_html=True)
 
 with t_mod:
     if st.session_state.m_imgs:
-        for i, img in enumerate(st.session_state.m_imgs): process_and_display(img, f"Mod_{i+1}", f"m_{i}")
-    else: st.markdown('<div class="empty-placeholder">暂无模特图</div>', unsafe_allow_html=True)
+        for i, img in enumerate(st.session_state.m_imgs): render_image(img, f"Mod_{i+1}", f"m_{i}")
+    else: st.markdown('<div class="empty-placeholder">No Data</div>', unsafe_allow_html=True)
 
 # --- 执行逻辑 ---
+
 if btn_seo:
-    add_log("开始优化标题模型请求...", "info")
+    write_log(f"正在调用 [{model_text}] 优化标题...")
     data, raw = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
+    st.session_state.full_history_raw.insert(0, raw)
     st.session_state.seo_res = data.get('choices',[{}])[0].get('message',{}).get('content', "生成失败")
-    st.session_state.raw_response = raw
-    add_log("标题生成成功！已更新至选项卡。", "success")
+    write_log("标题生成成功。")
     st.rerun()
 
 if (btn_prod or btn_mod) and u_file:
-    key = "p_imgs" if btn_prod else "m_imgs"
-    st.session_state[key] = []
-    add_log(f"启动批量任务：生成 {u_img_count} 张{'商品' if btn_prod else '模特'}图", "info")
+    target_key = "p_imgs" if btn_prod else "m_imgs"
+    st.session_state[target_key] = []
     
-    with st.status("工作站运行中...") as status:
-        all_raws = []
+    write_log(f"开始批量图片生成任务 (数量: {u_img_count})...")
+    
+    with st.status("🚀 引擎处理中...") as status:
         for i in range(u_img_count):
-            msg = f"正在请求第 {i+1} 张图片参数..."
-            add_log(msg, "info")
-            st.write(msg)
-            
+            write_log(f"正在处理第 {i+1} 张图片...")
             data, raw = engine.run_smart_gen(model_img, ("商品图" if btn_prod else "模特图"), u_title, u_gender, u_category, u_file)
-            img = data.get('choices', [{}])[0].get('message', {}).get('images', [None])[0]
+            st.session_state.full_history_raw.insert(0, raw)
             
-            if img:
-                st.session_state[key].append(img)
-                add_log(f"第 {i+1} 张生成成功。", "success")
+            img_url = data.get('choices', [{}])[0].get('message', {}).get('images', [None])[0]
+            if img_url:
+                st.session_state[target_key].append(img_url)
+                write_log(f"第 {i+1} 张图片成功接收。")
             else:
-                add_log(f"第 {i+1} 张生成失败，请查阅下方 JSON。", "error")
-            all_raws.append(raw)
-            
-        st.session_state.raw_response = {"batch_results": all_raws}
-        status.update(label="任务完成", state="complete")
+                write_log(f"第 {i+1} 张图片失败: {data.get('error', '未知错误')}", is_error=True)
+        
+        status.update(label="生成序列结束", state="complete", expanded=False)
     
-    add_log("全量生成序列结束。", "success")
+    write_log("所有任务已完成。")
     st.rerun()
