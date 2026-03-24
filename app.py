@@ -138,7 +138,49 @@ class JewelryAIEngineV48:
 # Streamlit UI
 # ==========================================
 st.set_page_config(page_title="AM JEWELRY V48", layout="wide")
-
+# ==========================================
+# 20260324 16:37 优化标题显示
+# ==========================================
+st.markdown("""
+    <style>
+    div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
+    .stFileUploader { padding-top: 0rem; }
+    div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
+    
+    /* ======== SEO 标题展示 UI 样式 ======== */
+    .seo-card {
+        border-radius: 8px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+        overflow: hidden;
+        border: 1px solid #e0e0e0;
+        font-family: sans-serif;
+    }
+    .seo-row {
+        padding: 12px 16px;
+        line-height: 1.6;
+    }
+    .seo-title {
+        background-color: #e3f2fd; /* 浅蓝色背景 */
+        color: #0d47a1;            /* 深蓝色字体 */
+        border-bottom: 1px solid #bbdefb;
+    }
+    .seo-trans {
+        background-color: #f1f8e9; /* 浅绿色背景 */
+        color: #33691e;            /* 深绿色字体 */
+        border-bottom: 1px solid #dcedc8;
+    }
+    .seo-reason {
+        background-color: #fff3e0; /* 浅橙色背景 */
+        color: #e65100;            /* 深橙色字体 */
+    }
+    .seo-label {
+        font-weight: 600;
+        margin-right: 8px;
+    }
+    </style>
+""", unsafe_allow_html=True)
+# ==========================================
 st.markdown("""
     <style>
     div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
@@ -194,11 +236,49 @@ if btn_mod and u_file:
         res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file)
         if res: st.session_state.m_imgs.append(res)
     log_area.success("模特图生成完毕")
-
+    
+# ==========================================
 # 展示区
+# ==========================================
+# if st.session_state.seo_result:
+#     with st.expander("📝 查看优化标题", expanded=True):
+#         st.write(st.session_state.seo_result)
+# ==========================================
+# 20260324 16:37 展示区优化标题显示
+# ==========================================
 if st.session_state.seo_result:
     with st.expander("📝 查看优化标题", expanded=True):
-        st.write(st.session_state.seo_result)
+        raw_text = st.session_state.seo_result
+        
+        # 使用正则提取三组内容
+        pattern = r"推荐标题([一二三])：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)(?=\n推荐标题|$)"
+        matches = re.findall(pattern, raw_text, re.DOTALL)
+        
+        if matches:
+            for match in matches:
+                num, title, trans, reason = match
+                # 拼接 HTML 卡片结构
+                html_content = f"""
+                <div class="seo-card">
+                    <div class="seo-row seo-title">
+                        <div class="seo-label">推荐标题{num}：</div> 
+                        <div>{title.strip()}</div>
+                    </div>
+                    <div class="seo-row seo-trans">
+                        <div class="seo-label">中文翻译：</div> 
+                        <div>{trans.strip()}</div>
+                    </div>
+                    <div class="seo-row seo-reason">
+                        <div class="seo-label">推荐理由：</div> 
+                        <div>{reason.strip()}</div>
+                    </div>
+                </div>
+                """
+                st.markdown(html_content, unsafe_allow_html=True)
+        else:
+            # 降级处理：如果大模型偶尔没有严格按照格式输出，则回退到普通文本显示
+            st.markdown(raw_text)
+# ==========================================           
 
 if st.session_state.p_imgs or st.session_state.m_imgs:
     t1, t2 = st.tabs(["🖼️ 商品展示", "👤 模特展示"])
