@@ -157,7 +157,7 @@ with st.sidebar:
     btn_prod = c2.button("商品")
     btn_mod = c3.button("模特")
     
-    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=1)
+    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=0)
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS)
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=4)
 
