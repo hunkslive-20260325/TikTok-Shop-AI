@@ -244,22 +244,65 @@ log_area = st.empty()
 
 if btn_seo:
     st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
+    
+# ==========================================
+# 20260324 16:37 优化日志显示
+# ==========================================  
+# --- 主界面逻辑 ---
+# 定义一个辅助函数来渲染日志
+def update_log(msg, icon="⏳"):
+    log_area.markdown(f"""
+        <div class="log-container">
+            <span class="log-icon">{icon}</span>
+            <span>{msg}</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+log_area = st.empty()
+# 初始状态提示（可选）
+update_log("等待操作指令...", icon="🤖")
+
+if btn_seo:
+    update_log("正在分析市场趋势并生成 SEO 标题...", icon="🔍")
+    st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
+    update_log("标题生成任务已完成！", icon="✅")
 
 if btn_prod and u_file:
     st.session_state.p_imgs = []
     for i in range(u_img_count):
-        log_area.info(f"正在生成第 {i+1}/{u_img_count} 张商品图...")
+        update_log(f"正在生成商品图：进度 {i+1}/{u_img_count}...", icon="🖼️")
         res = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_market, u_file)
         if res: st.session_state.p_imgs.append(res)
-    log_area.success("商品图生成完毕")
+    update_log("所有商品图已生成完毕！", icon="✅")
 
 if btn_mod and u_file:
     st.session_state.m_imgs = []
     for i in range(u_img_count):
-        log_area.info(f"正在生成第 {i+1}/{u_img_count} 张模特图...")
+        update_log(f"正在生成模特图：进度 {i+1}/{u_img_count}...", icon="👤")
         res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file)
         if res: st.session_state.m_imgs.append(res)
-    log_area.success("模特图生成完毕")
+    update_log("所有模特图已生成完毕！", icon="✅")
+# ==========================================
+
+# ==========================================
+# 20260324 16:37 注释优化日志显示
+# ==========================================    
+# if btn_prod and u_file:
+#     st.session_state.p_imgs = []
+#     for i in range(u_img_count):
+#         log_area.info(f"正在生成第 {i+1}/{u_img_count} 张商品图...")
+#         res = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_market, u_file)
+#         if res: st.session_state.p_imgs.append(res)
+#     log_area.success("商品图生成完毕")
+
+# if btn_mod and u_file:
+#     st.session_state.m_imgs = []
+#     for i in range(u_img_count):
+#         log_area.info(f"正在生成第 {i+1}/{u_img_count} 张模特图...")
+#         res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file)
+#         if res: st.session_state.m_imgs.append(res)
+#     log_area.success("模特图生成完毕")
+# ==========================================
     
 # ==========================================
 # 展示区
