@@ -153,9 +153,9 @@ with st.sidebar:
     
     # 功能按钮移至此处
     c1, c2, c3 = st.columns(3)
-    btn_seo = c1.button("✨ 标题")
-    btn_prod = c2.button("🖼️ 商品")
-    btn_mod = c3.button("👤 模特")
+    btn_seo = c1.button("标题")
+    btn_prod = c2.button("商品")
+    btn_mod = c3.button("模特")
     
     u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=1)
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS)
