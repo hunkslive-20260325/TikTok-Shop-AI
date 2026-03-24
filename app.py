@@ -1,4 +1,3 @@
-# 20260324-待优化日志信息版本
 import streamlit as st
 import requests
 import base64
@@ -36,9 +35,9 @@ def safe_post(url, headers, json_data, timeout=60):
         return {"error": f"请求失败: {e}"}
 
 # ------------------------------------------
-# 显示图片 + 下载按钮 (支持 800x800 缩放)
+# 显示图片 + 下载按钮 (回归原始比例)
 # ------------------------------------------
-def display_image(data, log_area=None, filename="image.png"):
+def display_image(data, filename="image.png"):
     try:
         img_data = None
         if isinstance(data, dict):
@@ -53,25 +52,27 @@ def display_image(data, log_area=None, filename="image.png"):
 
         if not img_data: return
 
-        # 解码
+        # 解码与加载
         if isinstance(img_data, str) and img_data.startswith("data:image"):
             img_base64 = img_data.split(",")[1]
             img = Image.open(BytesIO(base64.b64decode(img_base64)))
         elif isinstance(img_data, str) and img_data.startswith("http"):
-            img = img_data # 此时是 URL
+            img = img_data # 直接使用 URL 
         else:
             img = Image.open(BytesIO(base64.b64decode(img_data)))
 
-        # 统一大小为 800x800
-        if isinstance(img, Image.Image):
-            img = img.resize((800, 800), Image.Resampling.LANCZOS)
+        # 展示图片：使用容器宽度自适应，不强制 800 像素
+        st.image(img, use_container_width=True)
 
-        st.image(img, use_container_width=False, width=800)
-
+        # 下载逻辑处理
         if isinstance(img, Image.Image):
             buf = BytesIO()
             img.save(buf, format="PNG")
             st.download_button(label="⬇️ 下载", data=buf.getvalue(), file_name=filename, mime="image/png", key=f"dl_{hash(str(data))}")
+        elif isinstance(img, str) and img.startswith("http"):
+            # 如果是 URL，提供简单的链接（或根据需要预下载）
+            st.markdown(f"[🔗 点击打开原图]({img})")
+            
     except Exception as e:
         st.error(f"图片显示失败: {e}")
 
@@ -87,7 +88,7 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
+    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
             b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
@@ -95,6 +96,7 @@ class JewelryAIEngineV48:
             focus_parts = {"项链": "neck", "戒指": "fingers", "手链": "wrist", "手镯": "wrist", "耳环": "ear", "耳钉": "ear", "头饰": "hair", "脚链": "ankle"}
             target_part = focus_parts.get(category, "body")
 
+            # 移除强制 1:1 的 Prompt 约束，恢复自然构图描述
             if p_type == "模特图" and gender == "男性":
                 prompt = f"Professional male model wearing {title} {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 8k."
             elif p_type == "模特图" and gender == "女性":
@@ -118,16 +120,13 @@ class JewelryAIEngineV48:
         return res.get('choices',[{}])[0].get('message',{}).get('content', "")
 
 # ==========================================
-# Streamlit UI 优化
+# Streamlit UI
 # ==========================================
 st.set_page_config(page_title="AM JEWELRY V48", layout="wide")
 
-# CSS 注入：调整 Radio 横向展示 + 缩小 FileUploader 高度
 st.markdown("""
     <style>
-    /* 让 Radio 横向排列 */
     div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
-    /* 缩小上传组件高度 */
     .stFileUploader { padding-top: 0rem; }
     div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
     </style>
@@ -146,19 +145,16 @@ with st.sidebar:
     u_market = st.selectbox("目标市场", ["东南亚","美国","日韩","拉美","中东","非洲"])
     u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
     u_gender = st.radio("目标人群", ["女性","男性"])
-    
-    # 缩小高度的上传组件
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
     
     st.divider()
     
-    # 功能按钮移至此处
     c1, c2, c3 = st.columns(3)
-    btn_seo = c1.button("标题")
-    btn_prod = c2.button("商品")
-    btn_mod = c3.button("模特")
+    btn_seo = c1.button("✨ 标题")
+    btn_prod = c2.button("🖼️ 商品")
+    btn_mod = c3.button("👤 模特")
     
-    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=0)
+    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=1)
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS)
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=4)
 
