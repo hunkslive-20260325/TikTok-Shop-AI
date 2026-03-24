@@ -57,7 +57,7 @@ def display_image(data, log_area=None, filename="image.png"):
         if not img_data:
             raise ValueError("未找到可用图片字段")
 
-        # Base64 格式
+        # Base64 格式处理
         if isinstance(img_data, str) and img_data.startswith("data:image"):
             img_base64 = img_data.split(",")[1]
             img = Image.open(BytesIO(base64.b64decode(img_base64)))
@@ -69,10 +69,9 @@ def display_image(data, log_area=None, filename="image.png"):
             except:
                 raise ValueError(f"图片格式未知: {type(img_data)}")
 
-        # 修复宽度问题
         st.image(img, use_container_width=True)
 
-        # 下载按钮
+        # 下载按钮逻辑
         if isinstance(img, Image.Image):
             buf = BytesIO()
             img.save(buf, format="PNG")
@@ -102,7 +101,9 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    # 核心需求优化部分：根据模特特征生成针对性 Prompt
+    # ------------------------------------------
+    # 核心优化：动态 Prompt 生成逻辑
+    # ------------------------------------------
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file, log_area=None):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
@@ -112,33 +113,56 @@ class JewelryAIEngineV48:
             
             b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
 
-            # --- 高级摄影美术指导 Prompt 开始 ---
+            # 1. 动态对焦部位定义
+            focus_parts = {
+                "项链": "neck and collarbone area",
+                "戒指": "fingers and hand",
+                "手链": "wrist and arm",
+                "手镯": "wrist",
+                "耳环": "ear and jawline",
+                "耳钉": "ear lobe",
+                "头饰": "hair and head",
+                "脚链": "ankle"
+            }
+            target_part = focus_parts.get(category, "body")
+
+            # 2. 核心摄影美术指导 Prompt 构建
             if p_type == "模特图" and gender == "男性":
+                # 男模特：硬朗都市感、皮肤纹理、针织服装对比
                 prompt = (
-                    f"Luxury jewelry campaign photography for {market} market. Model: deep tan skin, stubble, mature masculine facial contour. "
-                    f"Outfit: high-quality black crew neck knitwear as a dark background. Focus on {category}: {title}. "
-                    f"Background: blurred taupe and sand earth tones, minimalist studio, depth of field. "
-                    f"Lighting: side-backlighting (rim light), 45-degree key light, strong highlights and shadows on metallic texture. "
-                    f"Composition: Macro-Close-up (mouth to chest), interaction gesture: model hand pulling/tugging the chain. "
-                    f"Vibe: high contrast, sharp details on beard and jewelry, sophisticated masculine tension, 8k resolution."
+                    f"Professional high-end jewelry campaign photography for {market} market. "
+                    f"A male model wearing the {title} {category} shown in the uploaded image. "
+                    f"Focusing on the {target_part}. "
+                    f"Model features: natural masculine skin texture with visible pores and slight stubble. "
+                    f"Outfit: a high-quality dark black waffle-knit sweater to provide strong textural contrast. "
+                    f"Lighting: sophisticated side-backlighting with subtle rim light, highlighting the metallic luster of the {category}. "
+                    f"Composition: Macro-close-up, relaxed masculine pose, background is a minimalist seamless neutral gray studio. "
+                    f"Vibe: urban, luxurious, hyper-realistic, 8k resolution, cinematic quality."
                 )
             elif p_type == "模特图" and gender == "女性":
+                # 女模特：奶油肌、优雅姿态、轻薄亚麻/丝绸
                 prompt = (
-                    f"Ethereal jewelry editorial photography for {market} market. Model: white luminous dewy skin, soft aesthetic. "
-                    f"Makeup: soft pink tones, nude/translucent pink nails. Hair: natural wavy black hair with slight wisps. "
-                    f"Outfit: pure white or off-white silk clothing. Focus on {category}: {title}. "
-                    f"Lighting: soft diffused window light, no harsh shadows, bright and airy. "
-                    f"Composition: large negative space, macro close-up of neck and collarbone, side profile, eyes/upper face cropped out. "
-                    f"Interaction: finger gently touching the necklace or neckline. "
-                    f"Vibe: serene, elegant, dreamy bokeh, 85mm f/1.8 lens effect, high-end fashion magazine quality."
+                    f"Elegant jewelry editorial photography for {market} market. "
+                    f"An East Asian female model wearing the {title} {category} from the uploaded image. "
+                    f"Focusing on the {target_part}. "
+                    f"Model features: flawless 'creamy skin' texture with a soft luminous glow, elegant posture. "
+                    f"Outfit: a white breathable linen shirt or light silk blouse, top buttons undone. "
+                    f"Hand Interaction: manicured fingers gracefully touching the {target_part} near the {category}. "
+                    f"Lighting: soft diffused window light, bright and airy, no harsh shadows. "
+                    f"Composition: macro close-up, eyes/upper face cropped out to emphasize the jewelry. "
+                    f"Background: minimalist seamless warm beige or soft off-white. "
+                    f"Vibe: serene, sophisticated, high-end fashion magazine style, 8k."
                 )
             else:
-                # 商品图或其他情况
+                # 商品图：水泥几何、植物投影、禅意极简
                 prompt = (
-                    f"High-end product photography of {title} {category}, retain the original product from uploaded image, "
-                    f"1:1 ratio, high-end jewelry style, background: warm Morandi tones, geometric props, soft lighting, sharp focus."
+                    f"Professional macro product photography of the {title} {category} from the uploaded image. "
+                    f"The {category} is elegantly interacting with a rough concrete geometric podium and raw rock slabs. "
+                    f"Background: minimalist, seamless neutral Morandi tones. "
+                    f"Lighting: sharp, directional hard lighting from the side, creating a distinct shadow silhouette of palm fronds across the scene. "
+                    f"Textures: hyper-realistic contrast between smooth polished metal and rough stone texture. "
+                    f"Composition: 1:1 ratio, centered, high-end jewelry catalog style, 8k, tranquil Zen vibe."
                 )
-            # --- 高级摄影美术指导 Prompt 结束 ---
 
             payload = {
                 "model": mid,
@@ -152,7 +176,8 @@ class JewelryAIEngineV48:
             }
 
             if log_area:
-                log_area.info("⏳ 图片生成请求发送中...")
+                log_area.info(f"⏳ 正在生成{gender}{p_type}...")
+            
             res_json = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, payload, timeout=120)
             
             choices = res_json.get('choices', [{}])
@@ -163,13 +188,13 @@ class JewelryAIEngineV48:
                 if log_area: log_area.success("✅ 图片生成成功")
                 return img_list[0]
             else:
-                if log_area: log_area.error("❌ 图片生成失败，无返回图像")
+                if log_area: log_area.error("❌ 图片生成失败，请确认 API Key 或余额")
                 return res_json
         except Exception as e:
             if log_area: log_area.error(f"❌ 生成图片异常: {e}")
             return {"error": str(e)}
 
-    # 标题生成
+    # 标题生成逻辑 (保持原样)
     def run_seo(self, model_id, title, market, gender, category, log_area=None):
         try:
             seo_prompt = (
@@ -195,6 +220,7 @@ st.set_page_config(page_title="饰品专家 V48", layout="wide")
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngineV48(api_key)
 
+# 初始化状态
 for key in ["seo_result","p_img","m_img"]:
     if key not in st.session_state:
         st.session_state[key] = None
@@ -208,7 +234,7 @@ with st.sidebar:
     u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
 
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS, index=0)
-    model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=1)
+    model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=4) # 默认 Flux.2-pro
 
     if st.button("重置"):
         st.session_state.seo_result = None
@@ -224,6 +250,7 @@ btn_mod = c3.button("👤 生成模特图")
 
 log_area = st.empty()
 
+# 逻辑处理：标题生成
 if btn_seo:
     st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category, log_area)
 
@@ -249,12 +276,14 @@ if st.session_state.seo_result:
     else:
         st.info(st.session_state.seo_result)
 
+# 逻辑处理：图片生成
 if (btn_prod or btn_mod) and u_file:
     if btn_prod:
         st.session_state.p_img = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_market, u_file, log_area)
     if btn_mod:
         st.session_state.m_img = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file, log_area)
 
+# 展示结果
 if st.session_state.p_img or st.session_state.m_img:
     tab_prod, tab_model = st.tabs(["🖼️ 商品图","👤 模特图"])
     with tab_prod:
