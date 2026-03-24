@@ -143,6 +143,30 @@ st.set_page_config(page_title="AM JEWELRY V48", layout="wide")
 # ==========================================
 st.markdown("""
     <style>
+    # ==========================================
+    # 20260324 16:37 优化日志显示
+    # ==========================================
+    /* ======== 日志展示区 UI 样式 ======== */
+    .log-container {
+        background-color: #1e1e1e; /* 深灰色背景 */
+        color: #00ff00;            /* 荧光绿字体，模拟控制台 */
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 5px solid #0d47a1;
+        margin-bottom: 20px;
+        font-family: 'Courier New', Courier, monospace;
+        min-height: 60px;
+        display: flex;
+        align-items: center;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .log-icon {
+        margin-right: 12px;
+        font-size: 1.2rem;
+    }
+    /* ======== 日志展示区 UI 样式 ======== */
+    # ==========================================
+    
     div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
     .stFileUploader { padding-top: 0rem; }
     div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
