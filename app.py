@@ -115,7 +115,22 @@ class JewelryAIEngineV48:
             return None
 
     def run_seo(self, model_id, title, market, gender, category):
-        prompt = f"针对{title}生成三条{market}市场{gender}用{category}的SEO标题，含中文翻译和理由。"
+        # prompt = f"针对{title}生成三条{market}市场{gender}用{category}的SEO标题，含中文翻译和理由。"
+        # 20260324 16:37 优化标题prompt生成条件
+        prompt = (
+            f"请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按推荐级别排序。\n"
+            f"要求：推荐理由不超过50字。\n\n"
+            f"输出格式：\n"
+            f"推荐标题一：****\n"
+            f"中文翻译：****\n"
+            f"推荐理由：****\n"
+            f"推荐标题二：****\n"
+            f"中文翻译：****\n"
+            f"推荐理由：****\n"
+            f"推荐标题三：****\n"
+            f"中文翻译：****\n"
+            f"推荐理由：****"
+        )
         res = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, {"model": model_id, "messages":[{"role":"user","content":prompt}]})
         return res.get('choices',[{}])[0].get('message',{}).get('content', "")
 
