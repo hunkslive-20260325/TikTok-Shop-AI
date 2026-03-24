@@ -98,11 +98,11 @@ class JewelryAIEngineV48:
 
             # 移除强制 1:1 的 Prompt 约束，恢复自然构图描述
             if p_type == "模特图" and gender == "男性":
-                prompt = f"Professional male model wearing {title} {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 8k."
+                prompt = f"Professional male model wearing {title} {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 2k."
             elif p_type == "模特图" and gender == "女性":
-                prompt = f"Elegant East Asian female model wearing {title} {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 8k."
+                prompt = f"Elegant East Asian female model wearing {title} {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 2k."
             else:
-                prompt = f"Macro product photography of {title} {category} on concrete podium, palm leaf shadows, Morandi tones, 8k."
+                prompt = f"Macro product photography of {title} {category} on concrete podium, palm leaf shadows, Morandi tones, 2k."
 
             payload = {
                 "model": mid,
@@ -150,11 +150,11 @@ with st.sidebar:
     st.divider()
     
     c1, c2, c3 = st.columns(3)
-    btn_seo = c1.button("✨ 标题")
-    btn_prod = c2.button("🖼️ 商品")
-    btn_mod = c3.button("👤 模特")
+    btn_seo = c1.button("标题")
+    btn_prod = c2.button("商品")
+    btn_mod = c3.button("模特")
     
-    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=1)
+    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=0)
     model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS)
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=4)
 
