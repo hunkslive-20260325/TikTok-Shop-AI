@@ -37,8 +37,9 @@ def safe_post(url, headers, json_data, timeout=60):
 # ------------------------------------------
 # 显示图片 + 下载按钮 (回归原始比例)
 # ------------------------------------------
-def display_image(data, filename="image.png"):
+def display_image(data, filename="image.png", preview_width=400):
     try:
+        img_full = None 
         img_data = None
         if isinstance(data, dict):
             if "images" in data and data["images"]:
@@ -52,26 +53,25 @@ def display_image(data, filename="image.png"):
 
         if not img_data: return
 
-        # 解码与加载
         if isinstance(img_data, str) and img_data.startswith("data:image"):
             img_base64 = img_data.split(",")[1]
-            img = Image.open(BytesIO(base64.b64decode(img_base64)))
+            raw_bytes = base64.b64decode(img_base64)
+            img_full = Image.open(BytesIO(raw_bytes))
         elif isinstance(img_data, str) and img_data.startswith("http"):
-            img = img_data # 直接使用 URL 
+            img_full = img_data  # URL 情况
         else:
-            img = Image.open(BytesIO(base64.b64decode(img_data)))
+            raw_bytes = base64.b64decode(img_data)
+            img_full = Image.open(BytesIO(raw_bytes))
 
-        # 展示图片：使用容器宽度自适应，不强制 800 像素
-        st.image(img, use_container_width=True)
+        # --- 关键修改：限制预览宽度 ---
+        st.image(img_full, width=preview_width)
 
-        # 下载逻辑处理
-        if isinstance(img, Image.Image):
+        if isinstance(img_full, Image.Image):
             buf = BytesIO()
-            img.save(buf, format="PNG")
-            st.download_button(label="⬇️ 下载", data=buf.getvalue(), file_name=filename, mime="image/png", key=f"dl_{hash(str(data))}")
-        elif isinstance(img, str) and img.startswith("http"):
-            # 如果是 URL，提供简单的链接（或根据需要预下载）
-            st.markdown(f"[🔗 点击打开原图]({img})")
+            img_full.save(buf, format="PNG")
+            st.download_button(label="⬇️ 下载全尺寸原图", data=buf.getvalue(), file_name=filename, mime="image/png", key=f"dl_{hash(str(data))}")
+        elif isinstance(img_full, str) and img_full.startswith("http"):
+            st.markdown(f"[🔗 打开原图链接]({img_full})")
             
     except Exception as e:
         st.error(f"图片显示失败: {e}")
@@ -369,10 +369,15 @@ if st.session_state.seo_result:
 if st.session_state.p_imgs or st.session_state.m_imgs:
     t1, t2 = st.tabs(["🖼️ 商品展示", "👤 模特展示"])
     with t1:
+        # 每行显示 2 个，这样 400px x 2 刚好适合大部分屏幕
+        cols = st.columns(2) 
         for idx, img in enumerate(st.session_state.p_imgs):
-            st.markdown(f"**版本 {idx+1}**")
-            display_image(img, filename=f"prod_{idx}.png")
+            with cols[idx % 2]:
+                st.markdown(f"**版本 {idx+1}**")
+                display_image(img, filename=f"prod_{idx}.png", preview_width=400)
     with t2:
+        cols = st.columns(2)
         for idx, img in enumerate(st.session_state.m_imgs):
-            st.markdown(f"**版本 {idx+1}**")
-            display_image(img, filename=f"model_{idx}.png")
+            with cols[idx % 2]:
+                st.markdown(f"**版本 {idx+1}**")
+                display_image(img, filename=f"model_{idx}.png", preview_width=400)
