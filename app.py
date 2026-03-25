@@ -119,14 +119,14 @@ class JewelryAIEngineV48:
                 # - Professional studio lighting: 专业影棚光，确保饰品不发黑
                 
                 prompt = (
-                    f"Professional studio jewelry photography of {title} {category}, "
+                    f"Professional studio jewelry photography of {category}, "
                     f"with the {category} positioned elegantly as the primary focus. "
                     f"The display uses a single minimalist solid-colored geometric prisms (cylinders and blocks), "
                     f"with a smooth, matte finish that doesn't distract from the jewelry. "
                     f"The palette is a soft, warm neutral range of beiges and pale greys. "
                     f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
                     f"leaving the {category} in clear, bright light. "
-                    f"High-end editorial aesthetic, 8k resolution, shallow depth of field, sharp focus on jewelry texture and stones."
+                    f"High-end editorial aesthetic, 2k resolution, shallow depth of field, sharp focus on jewelry texture and stones."
                 )
 
             payload = {
