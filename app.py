@@ -112,13 +112,13 @@ class JewelryAIEngineV48:
                 # 20260324 模拟参考图风格优化：极简纯色光影 + 几何支柱
                 # ==========================================
                 prompt = (
-                    f"Luxury editorial jewelry photography of {category}. "
-                    f"The {category} is artfully placed on a single composition of two minimalist, smooth, solid-colored pedestals: "
-                    f"one wide flat disc and one slightly taller cylinder for a clean layered look. " # 明确只要两个，形成高低错落
-                    f"The entire scene features a seamless matte finish in matching Morandi beige, blending perfectly with the background. " # 材质统一
-                    f"A soft, out-of-focus shadow of a palm leaf is delicately projected in the distance, " # 强调投影在远处并虚化
-                    f"leaving the {category} in bright, crisp studio light. "
-                    f"High-end minimalist aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on {category} texture and gems."
+                    f"Luxury high-end editorial macro photography of {category}. "
+                    f"The {category} is elegantly suspended or draped, naturally dangling downwards due to gravity, "
+                    f"displayed on a minimalist smoothly cylindrical pedestal in matte Morandi beige finish. "
+                    f"It is positioned artfully as the sole focal point on the seamless matching background. "
+                    f"Clean, soft professional studio lighting without harsh shadows. "
+                    f"A very delicate, thin, out-of-focus shadow of a monstera leaf is faintly projected in the distance. "
+                    f"8k resolution, shallow depth of field, sharp focus strictly on {category} texture, metal reflections and gems."
                 )
 
             payload = {
