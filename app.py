@@ -98,11 +98,11 @@ class JewelryAIEngineV48:
 
             # 移除强制 1:1 的 Prompt 约束，恢复自然构图描述
             if p_type == "模特图" and gender == "男性":
-                prompt = f"Professional male model wearing {title} {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 2k."
+                prompt = f"Professional male model wearing {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 2k."
             elif p_type == "模特图" and gender == "女性":
-                prompt = f"Elegant East Asian female model wearing {title} {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 2k."
+                prompt = f"Elegant East Asian female model wearing {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 2k."
             else:
-                prompt = f"Macro product photography of {title} {category} on concrete podium, palm leaf shadows, Morandi tones, 2k."
+                prompt = f"Macro product photography of {category} on concrete podium, palm leaf shadows, Morandi tones, 2k."
 
             payload = {
                 "model": mid,
