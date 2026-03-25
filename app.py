@@ -111,24 +111,14 @@ class JewelryAIEngineV48:
                 # ==========================================
                 # 20260324 模拟参考图风格优化：极简纯色光影 + 几何支柱
                 # ==========================================
-                # 关键词解析：
-                # - Minimalist solid-colored geometric prisms: 极简纯色几何棱柱（替换“水泥”，更干净）
-                # - Smooth, matte finish: 光滑、哑光表面（确保质感高级，不分散注意力）
-                # - Soft, warm neutral palette: 柔和、暖色调的中性色盘（营造统一高级感）
-                # - Delicate, thin tropical leaf shadows: 精致、纤细的热带植物投影（点缀背景）
-                # - Professional studio lighting: 专业影棚光，确保饰品不发黑
-                
                 prompt = (
-                    f"Professional studio jewelry photography of {category}, "
-                    f"with the {category} positioned elegantly as the primary focus. "
-                    f"The {category} is displayed elegantly on a configuration of minimalist smooth solid-colored geometric prisms (cylinders and blocks), "
-                    f"positioning it as the sole focal point. "
-                    f"The pedestal and the perfectly clean solid-colored matte background are made of the same matching warm grey or pale beige material. "
-                    f"with a smooth, matte finish that doesn't distract from the jewelry. "
-                    f"The palette is a soft, warm neutral range of beiges and pale greys. "
-                    f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
-                    f"leaving the {category} in clear, bright light. "
-                    f"High-end editorial aesthetic, 2k resolution, shallow depth of field, sharp focus on jewelry texture and stones."
+                    f"Luxury editorial jewelry photography of {category}. "
+                    f"The {category} is artfully placed on a single composition of two minimalist, smooth, solid-colored pedestals: "
+                    f"one wide flat disc and one slightly taller cylinder for a clean layered look. " # 明确只要两个，形成高低错落
+                    f"The entire scene features a seamless matte finish in matching Morandi beige, blending perfectly with the background. " # 材质统一
+                    f"A soft, out-of-focus shadow of a palm leaf is delicately projected in the distance, " # 强调投影在远处并虚化
+                    f"leaving the {category} in bright, crisp studio light. "
+                    f"High-end minimalist aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on {category} texture and gems."
                 )
 
             payload = {
