@@ -107,25 +107,22 @@ class JewelryAIEngineV48:
                 # ==========================================
                 # prompt = f"Macro product photography of {category} on concrete podium, palm leaf shadows, Morandi tones, 2k."
                 # ==========================================
-                
-                # 20260324 模拟参考图风格优化：极简纯色光影 + 几何支柱
+
+                # ==========================================
+                # 20260324 极简降噪优化：单一背景 + 融合几何支柱
                 # ==========================================
                 # 关键词解析：
-                # - Minimalist solid-colored geometric prisms: 极简纯色几何棱柱（替换“水泥”，更干净）
-                # - Smooth, matte finish: 光滑、哑光表面（确保质感高级，不分散注意力）
-                # - Soft, warm neutral palette: 柔和、暖色调的中性色盘（营造统一高级感）
-                # - Delicate, thin tropical leaf shadows: 精致、纤细的热带植物投影（点缀背景）
-                # - Professional studio lighting: 专业影棚光，确保饰品不发黑
+                # - Single minimalist solid-colored pedestal: 单个极简纯色支柱（减少干扰）
+                # - Perfectly matching the solid matte background: 完美融合背景（消除体积感）
+                # - Clean, soft professional studio lighting: 干净、柔和的影棚光，无干扰投影
                 
                 prompt = (
-                    f"Professional studio jewelry photography of {category}, "
-                    f"with the {category} positioned elegantly as the primary focus. "
-                    f"The display uses minimalist solid-colored geometric prisms (cylinders and blocks), "
-                    f"with a smooth, matte finish that doesn't distract from the jewelry. "
-                    f"The palette is a soft, warm neutral range of beiges and pale greys. "
-                    f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
-                    f"leaving the {category} in clear, bright light. "
-                    f"High-end editorial aesthetic, 2k resolution, shallow depth of field, sharp focus on jewelry texture and stones."
+                    f"A professional, high-end studio product photograph of {category}. "
+                    f"The {category} is displayed elegantly on a single minimalist smooth solid-colored cylindrical pedestal, "
+                    f"positioning it as the sole focal point. "
+                    f"The pedestal and the clean solid-colored background are made of the same perfectly matching matte Morandi grey material. "
+                    f"Clean, soft professional studio lighting, creating no distracting reflections. "
+                    f"High-end editorial aesthetic, 2k resolution, shallow depth of field, sharp focus strictly on the {category}'s textures and details."
                 )
 
             payload = {
