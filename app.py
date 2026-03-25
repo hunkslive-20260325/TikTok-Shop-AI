@@ -121,7 +121,9 @@ class JewelryAIEngineV48:
                 prompt = (
                     f"Professional studio jewelry photography of {category}, "
                     f"with the {category} positioned elegantly as the primary focus. "
-                    f"The display uses a single minimalist solid-colored geometric prisms (cylinders), "
+                    f"The {category} is displayed elegantly on a configuration of minimalist smooth solid-colored geometric prisms (cylinders and blocks), "
+                    f"positioning it as the sole focal point. "
+                    f"The pedestal and the perfectly clean solid-colored matte background are made of the same matching warm grey or pale beige material. "
                     f"with a smooth, matte finish that doesn't distract from the jewelry. "
                     f"The palette is a soft, warm neutral range of beiges and pale greys. "
                     f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
