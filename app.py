@@ -263,8 +263,9 @@ with st.sidebar:
 # --- 主界面逻辑 ---
 log_area = st.empty()
 
-if btn_seo:
-    st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
+# --- 注释: 生成标题重复 ---
+# if btn_seo:
+#     st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
     
 # ==========================================
 # 20260324 16:37 优化日志显示
