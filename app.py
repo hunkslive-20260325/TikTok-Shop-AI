@@ -21,6 +21,8 @@ ALL_TEXT_MODELS = [
     "deepseek/deepseek-v3.2",
     "deepseek/deepseek-chat",
     "openai/gpt-5.4",
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-3.1-pro-preview-customtools"
 ]
 
 # ------------------------------------------
