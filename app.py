@@ -114,17 +114,28 @@ class JewelryAIEngineV48:
                 # 20260324 模拟参考图风格优化：极简纯色光影 + 几何支柱
                 # ==========================================
                 prompt = (
-                    f"A high-end macro product photography of the {category} seen in the reference image. "
-                    f"The {category} is displayed elegantly on a configuration of minimalist smooth solid-colored geometric prisms (cylinders and blocks), "
-                    f"positioning it as the sole focal point. "
-                    f"The pedestal and the perfectly clean solid-colored matte background are made of the same matching warm grey or Morandi beige material. "
-                    f"with a smooth, matte finish that doesn't distract from the jewelry. "
-                    f"The palette is a soft, warm neutral range of beiges and pale greys. "
-                    f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
-                    f"leaving the {category} in clear, bright light. "
-                    f"High-end editorial aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on the {category}'s textures and details."
+                    # ==========================================
+                    # 20260324 调整prompt风格
+                    # ==========================================
+                    # f"A high-end macro product photography of the {category} seen in the reference image. "
+                    # f"The {category} is displayed elegantly on a configuration of minimalist smooth solid-colored geometric prisms (cylinders and blocks), "
+                    # f"positioning it as the sole focal point. "
+                    # f"The pedestal and the perfectly clean solid-colored matte background are made of the same matching warm grey or Morandi beige material. "
+                    # f"with a smooth, matte finish that doesn't distract from the jewelry. "
+                    # f"The palette is a soft, warm neutral range of beiges and pale greys. "
+                    # f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
+                    # f"leaving the {category} in clear, bright light. "
+                    # f"High-end editorial aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on the {category}'s textures and details."
+                    # ==========================================
+                    # 20260327 调整prompt风格
+                    # ==========================================
+                    f"A premium macro editorial photography of the {category} from the reference image. "
+                    f"The {category} is {placement_style} on {prop_selection}. "
+                    f"The scene features a monochromatic palette of {color_tone}, with the pedestal and matte background sharing the same {material_texture}. "
+                    f"Lighting is soft and natural, creating {lighting_effect} of {foliage_type} across the background, while ensuring the {category} remains the brightly lit focal point. "
+                    f"Composition is minimalist with significant negative space, 8k resolution, shallow depth of field, highlighting the intricate textures and metallic luster of the jewelry."
                 )
-
+                
             payload = {
                 "model": mid,
                 "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_in}"}}]}],
