@@ -163,7 +163,8 @@ class JewelryAIEngineV48:
                     # ==========================================
                     f"A high-end macro product photograph of the {category} from the reference image. "
                     f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
-                    f"The arrangement features {selected_support} nestled with {selected_organic}, "
+                    f"The arrangement features {selected_support} nestled with {selected_organic},{selected_organic} is positioned slightly behind or to the side of the {category}, "
+                    "ensuring it does not obscure or overlap with the jewelry itself.  "
                     f"creating a unique play of varied textures and heights. "
                     "The scene is bathed in bright, soft diffused natural daylight. "
                     f"A delicate, clean artistic shadow of {selected_shadow} is cast across the neutral-colored matte background, adding artistic depth. "
