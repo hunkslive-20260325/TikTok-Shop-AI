@@ -97,7 +97,44 @@ class JewelryAIEngineV48:
 
             focus_parts = {"项链": "neck", "戒指": "fingers", "手链": "wrist", "手镯": "wrist", "耳环": "ear", "耳钉": "ear", "头饰": "hair", "脚链": "ankle"}
             target_part = focus_parts.get(category, "body")
-
+            # A类：支撑物（坚硬、几何）
+            base_supports = [
+                "a textured travertine stone pedestal",
+                "a smooth concrete cylinder",
+                "a stack of matte ceramic tiles",
+                "a minimalist wooden block",
+                "a raw-edged sandstone plinth"
+            ]
+            
+            # B类：陪衬物（柔软、半透明、有机的）
+            organic_elements = [
+                "a softly folded linen cloth",
+                "a few scattered dried botanical petals",
+                "a delicate fluted glass perfume vial",
+                "a single beautifully veined green leaf",
+                "a strand of preserved moss"
+            ]
+            
+            # C类：背景光影元素（保持您的标志性风格）
+            shadow_elements = [
+                "Monstera leaf",
+                "palm frond",
+                "venetian blinds",
+                "abstract window pane",
+                "arching fern"
+            ]
+            
+            # ==========================================
+            # 动态生成 Prompt 逻辑：实现“千人千面”
+            # ==========================================
+            
+            # 在每次生成时，随机抽取 1 个 A类 和 1 个 B类 进行组合
+            # 这样组合出的陈列方式有 5 * 5 = 25 种主要变化，且风格统一
+            selected_support = random.choice(base_supports)
+            selected_organic = random.choice(organic_elements)
+            # 随机抽取一个阴影元素
+            selected_shadow = random.choice(shadow_elements)
+        
             # 移除强制 1:1 的 Prompt 约束，恢复自然构图描述
             if p_type == "模特图" and gender == "男性":
                 prompt = f"Professional male model wearing {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 2k."
@@ -125,10 +162,10 @@ class JewelryAIEngineV48:
                     # ==========================================
                     f"A high-end macro product photograph of the {category} from the reference image. "
                     f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
-                    f"smooth, solid-colored geometric pedestals (such as a clean cylinder or a staggered block stack). "
-                    "The scene is lit by soft, diffused natural daylight. "
-                    "A delicate, artistic shadow pattern (e.g., from a monstera leaf, palm frond, or window blinds) "
-                    "is cast across the background, adding depth without distracting from the main object. "
+                    f"The arrangement features {selected_support} nestled with {selected_organic}, "
+                    f"creating a unique play of varied textures and heights. "
+                    "The scene is bathed in bright, soft diffused natural daylight. "
+                    f"A delicate, clean artistic shadow of {selected_shadow} is cast across the neutral-colored matte background, adding artistic depth. "
                     f"The AI must strictly replicate the unique textures and original finish of the {category} "
                     f"exactly as seen in the reference image—whether it is matte, polished, organic, or faceted. "
                     f"The overall aesthetic is clean, sophisticated, and tailored for the {market} market. "
