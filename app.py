@@ -141,7 +141,7 @@ class JewelryAIEngineV48:
                     # ==========================================
                     # 关键修改：整合目标市场风格变量
                     # ==========================================
-                    f"The overall aesthetic should align with the contemporary design preferences of the {u_market} market, "
+                    f"The overall aesthetic should align with the contemporary design preferences of the {market} market, "
                     f"prioritizing a minimalist, high-end editorial aesthetic. "
                     # ==========================================
                     
