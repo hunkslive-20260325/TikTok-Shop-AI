@@ -161,20 +161,18 @@ class JewelryAIEngineV48:
                     # ==========================================
                     # 20260327 调整prompt风格02
                     # ==========================================
-                    f"A high-end macro product photograph of the {category} from the reference image. "
-                    f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
-                    f"The arrangement features {selected_support} nestled with {selected_organic},{selected_organic} is positioned slightly behind or to the side of the {category}, "
-                    "ensuring it does not obscure or overlap with the jewelry itself.  "
-                    f"Strictly maintain the {category} as the largest and clearest object in the frame. "
-                    "Clear separation between the jewelry and the decorative props. "
-                    f"creating a unique play of varied textures and heights. "
-                    "The scene is bathed in bright, soft diffused natural daylight. "
-                    f"A delicate, clean artistic shadow of {selected_shadow} is cast across the neutral-colored matte background, adding artistic depth. "
-                    f"The AI must strictly replicate the unique textures and original finish of the {category} "
-                    f"exactly as seen in the reference image—whether it is matte, polished, organic, or faceted. "
-                    f"The overall aesthetic is clean, sophisticated, and tailored for the {market} market. "
-                    "Shot on a Hasselblad X1D II 50C with a 120mm macro lens. "
-                    "Extremely sharp focus on the details, shallow depth of field, photorealistic, 8k, ray tracing. "
+                    f"A high-end macro product photograph of the {category} from the reference image, using a deep-focus technique. "
+                    f"The {category} is the absolute, razor-sharp focal point from end to end, with no blur on its details. "
+                    f"The {category} is spread elegantly and clearly ON TOP OF {selected_support}. "
+                    f"The {selected_organic} is strictly a background element, positioned significantly behind or far to the side. "
+                    "There must be NO overlap or occlusion; the jewelry must be 100% visible and unobstructed. "
+                    "The scene uses bright, high-key natural daylight with center-weighted illumination on the jewelry. "
+                    f"Gemstones must exhibit brilliant multi-colored fire and intense sparkle. "
+                    f"A soft, out-of-focus shadow of {selected_shadow} adds depth to the background only. "
+                    f"AI must strictly replicate the original finish and complex textures of the {category} exactly. "
+                    f"Overall aesthetic: clean, premium, tailored for the {market} market. "
+                    "Shot on Hasselblad X1D II 50C, 120mm macro lens, f/11 aperture for maximum clarity, "
+                    "Extremely sharp focus across the entire piece, photorealistic, 8k, ray tracing."
                 )
                 
             payload = {
