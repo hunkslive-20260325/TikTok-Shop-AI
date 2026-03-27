@@ -123,31 +123,17 @@ class JewelryAIEngineV48:
                     # ==========================================
                     # 20260327 调整prompt风格02
                     # ==========================================
-                    # 核心描述：强调是参考图产品的“高级微距大片”
-                    f"A premium macro editorial photography of the {category} from the reference image. "
-                    
-                    # 动态构图：给AI选择权，但限制在“极简几何”范围内
-                    f"The {category} is elegantly positioned (e.g., draped, resting, or nestled) on a minimalist configuration of "
-                    f"smooth solid-colored geometric prisms, such as a single oversized cylinder or a clean staggered stack of blocks. "
-                    
-                    # 色彩与材质：锁定莫兰迪色系，强调“同色系”带来的高级感
-                    # f"The scene features a monochromatic palette of Morandi beige or warm cream, with the pedestal and matte background "
-                    # f"sharing the same smooth, fine-grained minimalist material. "
-                    
-                    # 动态光影：背景增加随机的艺术美感，但保证主体光照充足
-                    f"Lighting is soft natural daylight, casting a delicate, clean artistic shadow (e.g., of a monstera leaf, fern frond, "
-                    f"or abstract window blinds) across the background, while ensuring the {category} remains the brightly lit focal point. "
-                    
-                    # ==========================================
-                    # 关键修改：整合目标市场风格变量
-                    # ==========================================
-                    f"The overall aesthetic should align with the contemporary design preferences of the {market} market, "
-                    f"prioritizing a minimalist, high-end editorial aesthetic. "
-                    # ==========================================
-                    
-                    # 构图与画质：留白和精准对焦是关键
-                    f"Composition is minimalist with significant negative space, 8k resolution, shallow depth of field, "
-                    f"strictly highlighting the {category}'s intricate textures, metallic luster, and fine details."
+                    f"A high-end macro product photograph of the {category} from the reference image. "
+                    f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
+                    f"smooth, solid-colored geometric pedestals (such as a clean cylinder or a staggered block stack).
+                    "The scene is lit by soft, diffused natural daylight. "
+                    "A delicate, artistic shadow pattern (e.g., from a monstera leaf, palm frond, or window blinds) "
+                    "is cast across the background, adding depth without distracting from the main object. "
+                    f"The AI must strictly replicate the unique textures and original finish of the {category} "
+                    f"exactly as seen in the reference image—whether it is matte, polished, organic, or faceted. "
+                    f"The overall aesthetic is clean, sophisticated, and tailored for the {market} market. "
+                    "Shot on a Hasselblad X1D II 50C with a 120mm macro lens. "
+                    "Extremely sharp focus on the details, shallow depth of field, photorealistic, 8k, ray tracing. "
                 )
                 
             payload = {
