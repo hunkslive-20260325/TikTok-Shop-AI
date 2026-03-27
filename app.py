@@ -107,12 +107,6 @@ class JewelryAIEngineV48:
                 # ==========================================
                 # 20260325 10:59 优化商品图prompt
                 # ==========================================
-                # prompt = f"Macro product photography of {category} on concrete podium, palm leaf shadows, Morandi tones, 2k."
-                # ==========================================
-
-                # ==========================================
-                # 20260324 模拟参考图风格优化：极简纯色光影 + 几何支柱
-                # ==========================================
                 prompt = (
                     # ==========================================
                     # 20260324 调整prompt风格
@@ -126,14 +120,6 @@ class JewelryAIEngineV48:
                     # f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
                     # f"leaving the {category} in clear, bright light. "
                     # f"High-end editorial aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on the {category}'s textures and details."
-                    # ==========================================
-                    # 20260327 调整prompt风格01
-                    # ==========================================
-                    # f"A premium macro editorial photography of the {category} from the reference image. "
-                    # f"The {category} is {placement_style} on {prop_selection}. "
-                    # f"The scene features a monochromatic palette of {color_tone}, with the pedestal and matte background sharing the same {material_texture}. "
-                    # f"Lighting is soft and natural, creating {lighting_effect} of {foliage_type} across the background, while ensuring the {category} remains the brightly lit focal point. "
-                    # f"Composition is minimalist with significant negative space, 8k resolution, shallow depth of field, highlighting the intricate textures and metallic luster of the jewelry."
                     # ==========================================
                     # 20260327 调整prompt风格02
                     # ==========================================
