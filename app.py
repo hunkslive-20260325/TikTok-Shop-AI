@@ -109,7 +109,7 @@ class JewelryAIEngineV48:
                 # ==========================================
                 prompt = (
                     # ==========================================
-                    # 20260324 调整prompt风格
+                    # 20260324 调整prompt风格01
                     # ==========================================
                     # f"A high-end macro product photography of the {category} seen in the reference image. "
                     # f"The {category} is displayed elegantly on a configuration of minimalist smooth solid-colored geometric prisms (cylinders and blocks), "
