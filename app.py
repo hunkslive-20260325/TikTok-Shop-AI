@@ -125,7 +125,7 @@ class JewelryAIEngineV48:
                     # ==========================================
                     f"A high-end macro product photograph of the {category} from the reference image. "
                     f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
-                    f"smooth, solid-colored geometric pedestals (such as a clean cylinder or a staggered block stack).
+                    f"smooth, solid-colored geometric pedestals (such as a clean cylinder or a staggered block stack). "
                     "The scene is lit by soft, diffused natural daylight. "
                     "A delicate, artistic shadow pattern (e.g., from a monstera leaf, palm frond, or window blinds) "
                     "is cast across the background, adding depth without distracting from the main object. "
