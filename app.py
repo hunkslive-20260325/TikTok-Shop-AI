@@ -131,8 +131,8 @@ class JewelryAIEngineV48:
                     f"smooth solid-colored geometric prisms, such as a single oversized cylinder or a clean staggered stack of blocks. "
                     
                     # 色彩与材质：锁定莫兰迪色系，强调“同色系”带来的高级感
-                    f"The scene features a monochromatic palette of Morandi beige or warm cream, with the pedestal and matte background "
-                    f"sharing the same smooth, fine-grained minimalist material. "
+                    # f"The scene features a monochromatic palette of Morandi beige or warm cream, with the pedestal and matte background "
+                    # f"sharing the same smooth, fine-grained minimalist material. "
                     
                     # 动态光影：背景增加随机的艺术美感，但保证主体光照充足
                     f"Lighting is soft natural daylight, casting a delicate, clean artistic shadow (e.g., of a monstera leaf, fern frond, "
