@@ -127,13 +127,25 @@ class JewelryAIEngineV48:
                     # f"leaving the {category} in clear, bright light. "
                     # f"High-end editorial aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on the {category}'s textures and details."
                     # ==========================================
-                    # 20260327 调整prompt风格
+                    # 20260327 调整prompt风格01
+                    # ==========================================
+                    # f"A premium macro editorial photography of the {category} from the reference image. "
+                    # f"The {category} is {placement_style} on {prop_selection}. "
+                    # f"The scene features a monochromatic palette of {color_tone}, with the pedestal and matte background sharing the same {material_texture}. "
+                    # f"Lighting is soft and natural, creating {lighting_effect} of {foliage_type} across the background, while ensuring the {category} remains the brightly lit focal point. "
+                    # f"Composition is minimalist with significant negative space, 8k resolution, shallow depth of field, highlighting the intricate textures and metallic luster of the jewelry."
+                    # ==========================================
+                    # 20260327 调整prompt风格02
                     # ==========================================
                     f"A premium macro editorial photography of the {category} from the reference image. "
-                    f"The {category} is {placement_style} on {prop_selection}. "
-                    f"The scene features a monochromatic palette of {color_tone}, with the pedestal and matte background sharing the same {material_texture}. "
-                    f"Lighting is soft and natural, creating {lighting_effect} of {foliage_type} across the background, while ensuring the {category} remains the brightly lit focal point. "
-                    f"Composition is minimalist with significant negative space, 8k resolution, shallow depth of field, highlighting the intricate textures and metallic luster of the jewelry."
+                    f"The {category} is elegantly positioned (e.g., draped, resting, or nestled) on a minimalist configuration of "
+                    f"smooth solid-colored geometric prisms, such as a single oversized cylinder or a staggered stack of blocks. "
+                    f"The scene features a monochromatic palette of Morandi beige or warm cream, with the pedestal and matte background "
+                    f"sharing the same smooth, fine-grained minimalist material. "
+                    f"Lighting is soft natural daylight, casting a delicate, clean artistic shadow (e.g., of a monstera leaf, fern frond, "
+                    f"or abstract window blinds) across the background, while ensuring the {category} remains the brightly lit focal point. "
+                    f"Composition is minimalist with significant negative space, 8k resolution, shallow depth of field, "
+                    f"strictly highlighting the {category}'s intricate textures, metallic luster, and fine details."
                 )
                 
             payload = {
