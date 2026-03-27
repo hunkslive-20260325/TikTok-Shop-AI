@@ -161,17 +161,30 @@ class JewelryAIEngineV48:
                     # ==========================================
                     # 20260327 调整prompt风格02
                     # ==========================================
-                    f"A high-end macro product photograph of the {category} from the reference image. "
-                    f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
-                    f"The arrangement features {selected_support} nestled with {selected_organic}, "
-                    f"creating a unique play of varied textures and heights. "
-                    "The scene is bathed in bright, soft diffused natural daylight. "
-                    f"A delicate, clean artistic shadow of {selected_shadow} is cast across the neutral-colored matte background, adding artistic depth. "
-                    f"The AI must strictly replicate the unique textures and original finish of the {category} "
-                    f"exactly as seen in the reference image—whether it is matte, polished, organic, or faceted. "
-                    f"The overall aesthetic is clean, sophisticated, and tailored for the {market} market. "
-                    "Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens, set to f/16 aperture for maximum entire-piece clarity, Extremely sharp focus across the entire jewelry, 8k resolution, ray tracing."
-                )
+                    # f"A high-end macro product photograph of the {category} from the reference image. "
+                    # f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
+                    # f"The arrangement features {selected_support} nestled with {selected_organic}, "
+                    # f"creating a unique play of varied textures and heights. "
+                    # "The scene is bathed in bright, soft diffused natural daylight. "
+                    # f"A delicate, clean artistic shadow of {selected_shadow} is cast across the neutral-colored matte background, adding artistic depth. "
+                    # f"The AI must strictly replicate the unique textures and original finish of the {category} "
+                    # f"exactly as seen in the reference image—whether it is matte, polished, organic, or faceted. "
+                    # f"The overall aesthetic is clean, sophisticated, and tailored for the {market} market. "
+                    # "Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens, "
+                    # "set to f/16 aperture for maximum entire-piece clarity, Extremely sharp focus across the entire jewelry, 8k resolution, ray tracing."
+                    # ==========================================
+                    # 20260327 调整prompt风格03
+                    # ==========================================
+                    # 核心描述：建立绝对参考与全焦清晰（核心修改）
+                    f"A high-end macro product photography of the exact bracelet shown in the reference image, using a deep-focus technique. The bracelet is the absolute, razor-sharp focal point from end to end, with NO BLUR on its specific details. AI must strictly replicate the original finish and complex textures."
+                    # 陈列与构图：让主体更突出，道具虚化（解决道具抢戏）
+                    f"The bracelet is elegantly displayed, lying gracefully over {selected_support} in the foreground. To add Context without distracting, {selected_organic} is subtly placed in the far background and is significant blurred. Ensure the complete loop of the bracelet is 100% visible and unobstructed."
+                    # 光线：从“柔和日光”改为“聚焦展示光”（核心修改）
+                    # 明确描述宝石闪烁和金属性质
+                    f"The scene is bathed in bright, powerful, high-key natural daylight, with a focused beam directly illuminating the bracelet. Crucially, the central four-leaf clover motifs must sparkle intensely with brilliant multi-colored fire. The gemstones must exhibit strong, crisp highlights. The gold/silver chain and the small star-shaped charms must have highly polished, bright reflections, strictly avoiding a matte or dim finish. A clean, dynamic shadow pattern of {selected_shadow} adds artistic depth to the far background only."
+                    # 技术细节：锁定高光圈（f/16）以保证清晰度
+                    f"Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens, set to f/16 aperture for maximum entire-piece clarity, Extremely sharp focus across the entire jewelry, 8k resolution, ray tracing."
+            )
                 
             payload = {
                 "model": mid,
