@@ -91,7 +91,8 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
-    """            
+    """
+    优化
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
