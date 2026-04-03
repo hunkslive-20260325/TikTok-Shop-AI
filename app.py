@@ -166,7 +166,7 @@ class JewelryAIEngineV48:
                     f"Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens. Focus stacking is implied to ensure maximum clarity across the entire jewelry piece. 8k resolution, ray tracing for photorealistic material and texture rendering. Extremely sharp focus across the entire item."
             )
      """    
-     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
+    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
             b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
