@@ -201,14 +201,10 @@ class JewelryAIEngineV48:
             selected_shadow = random.choice(["palm frond", "venetian blinds", "soft window arch", "delicate fern"])
 
             # 4. 核心渲染逻辑 (重点：材质增强 & 焦点控制)
-            if p_type == "模特图":
-                # 模特图逻辑：增加肤色适配与质感
-                skin_tone = "warm glowing skin tone" if market == "东南亚" else "natural skin texture"
-                prompt = (
-                    f"High-end editorial fashion photography of a beautiful {gender} model wearing the specific {en_category} from reference image. "
-                    f"Close-up on the {target_part}, showcasing {skin_tone}. Background is {selected_vibe}. "
-                    f"Natural daylight, 8k resolution, cinematic bokeh, sharp focus on jewelry texture, TikTok viral aesthetic."
-                )
+            if p_type == "模特图" and gender == "男性":
+                prompt = f"Professional male model wearing {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 2k."
+            elif p_type == "模特图" and gender == "女性":
+                prompt = f"Elegant East Asian female model wearing {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 2k."
             else:
                 # 商品图逻辑：重点强调金属光泽与宝石折射
                 prompt = (
