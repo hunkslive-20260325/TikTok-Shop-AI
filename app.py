@@ -127,9 +127,9 @@ class JewelryAIEngineV48:
 
             # 4. 核心渲染逻辑 (重点：材质增强 & 焦点控制)
             if p_type == "模特图" and gender == "男性":
-                prompt = f"Professional male model wearing {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 2k."
+                prompt = f"Professional male model wearing {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 8k."
             elif p_type == "模特图" and gender == "女性":
-                prompt = f"Elegant East Asian female model wearing {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 2k."
+                prompt = f"Elegant East Asian female model wearing {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 8k."
             else:
                 # 商品图逻辑：重点强调金属光泽与宝石折射
                 prompt = (
