@@ -91,6 +91,7 @@ class JewelryAIEngineV48:
             "X-Title": "Jewelry_V48"
         }
 
+    """            
     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
@@ -142,7 +143,7 @@ class JewelryAIEngineV48:
             elif p_type == "模特图" and gender == "女性":
                 prompt = f"Elegant East Asian female model wearing {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 2k."
             else:
-                # ==========================================
+                # ========================================== 
                 # 20260325 10:59 优化商品图prompt
                 # ==========================================
                 prompt = (
@@ -158,34 +159,64 @@ class JewelryAIEngineV48:
                     # f"Artistic, thin shadows of a monstera leaf or fern frond are delicately projected on the background, "
                     # f"leaving the {category} in clear, bright light. "
                     # f"High-end editorial aesthetic, 8k resolution, shallow depth of field, sharp focus strictly on the {category}'s textures and details."
-                    # ==========================================
-                    # 20260327 调整prompt风格02
-                    # ==========================================
-                    # f"A high-end macro product photograph of the {category} from the reference image. "
-                    # f"The {category} is the absolute focal point, displayed elegantly on a minimalist arrangement of "
-                    # f"The arrangement features {selected_support} nestled with {selected_organic}, "
-                    # f"creating a unique play of varied textures and heights. "
-                    # "The scene is bathed in bright, soft diffused natural daylight. "
-                    # f"A delicate, clean artistic shadow of {selected_shadow} is cast across the neutral-colored matte background, adding artistic depth. "
-                    # f"The AI must strictly replicate the unique textures and original finish of the {category} "
-                    # f"exactly as seen in the reference image—whether it is matte, polished, organic, or faceted. "
-                    # f"The overall aesthetic is clean, sophisticated, and tailored for the {market} market. "
-                    # "Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens, "
-                    # "set to f/16 aperture for maximum entire-piece clarity, Extremely sharp focus across the entire jewelry, 8k resolution, ray tracing."
-                    # ==========================================
-                    # 20260327 调整prompt风格03
-                    # ==========================================
-                    # 核心描述：建立绝对参考与全焦清晰（核心修改）
-                    f"A high-end macro product photography of the exact bracelet shown in the reference image, using a deep-focus technique. The bracelet is the absolute, razor-sharp focal point from end to end, with NO BLUR on its specific details. AI must strictly replicate the original finish and complex textures."
-                    # 陈列与构图：让主体更突出，道具虚化（解决道具抢戏）
-                    f"The bracelet is elegantly displayed, lying gracefully over {selected_support} in the foreground. To add Context without distracting, {selected_organic} is subtly placed in the far background and is significant blurred. Ensure the complete loop of the bracelet is 100% visible and unobstructed."
-                    # 光线：从“柔和日光”改为“聚焦展示光”（核心修改）
-                    # 明确描述宝石闪烁和金属性质
-                    f"The scene is bathed in bright, powerful, high-key natural daylight, with a focused beam directly illuminating the bracelet. Crucially, the central four-leaf clover motifs must sparkle intensely with brilliant multi-colored fire. The gemstones must exhibit strong, crisp highlights. The gold/silver chain and the small star-shaped charms must have highly polished, bright reflections, strictly avoiding a matte or dim finish. A clean, dynamic shadow pattern of {selected_shadow} adds artistic depth to the far background only."
-                    # 技术细节：锁定高光圈（f/16）以保证清晰度
-                    f"Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens, set to f/16 aperture for maximum entire-piece clarity, Extremely sharp focus across the entire jewelry, 8k resolution, ray tracing."
+                    f"A high-end macro product photography of the specific jewelry piece shown in the reference image, using a deep-focus technique (shot at f/16 aperture). The entire jewelry piece is the absolute, razor-sharp focal point from end to end, ensuring all its specific details are in crisp focus with NO BLUR on the item itself. AI must strictly and photorealistically replicate the original finish, surface textures, and complex details of the reference piece."
+                    f"The entire jewelry piece is gracefully and naturally displayed, draped over or resting upon the top surface of the {selected_support} in the foreground, showing definite and logical physical contact. If a necklace or bracelet, it should show natural weight and slack; if a ring, it must be stable. To add Context without distracting, {selected_organic} is subtly placed in the far background and is significantly blurred."
+                    f"The scene is bathed in bright, powerful, high-key natural daylight, with a focused beam directly illuminating the jewelry piece. The lighting must be tuned to showcase the material's inherent properties: If metallic, it must have polished, bright reflections; if gemstones, they must exhibit clear, strong, and crisp highlights; if softer materials (like cotton or textured plastic), the light must emphasize and define their precise surface textures without dimming or matting. A clean, dynamic shadow pattern of {selected_shadow} adds artistic depth to the far background only."
+                    f"Clean, premium aesthetic tailored for high CTR. Shot on a Hasselblad X1D II 50C with a 120mm macro lens. Focus stacking is implied to ensure maximum clarity across the entire jewelry piece. 8k resolution, ray tracing for photorealistic material and texture rendering. Extremely sharp focus across the entire item."
             )
-                
+     """    
+     def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
+        try:
+            mid = ALL_DRAWING_MODELS.get(mid_key)
+            b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
+
+            # 1. 材质与部位映射（增强 AI 识别力）
+            mapping = {"项链": "Necklace", "戒指": "Ring", "手链": "Bracelet", "手镯": "Bangle", "耳环": "Earrings", "耳钉": "Ear Studs", "头饰": "Hair Accessory", "脚链": "Anklet"}
+            en_category = mapping.get(category, "Jewelry")
+            
+            focus_parts = {"项链": "neck", "戒指": "fingers", "手链": "wrist", "手镯": "wrist", "耳环": "ear", "耳钉": "ear", "头饰": "hair", "脚链": "ankle"}
+            target_part = focus_parts.get(category, "body")
+
+            # 2. 东南亚市场专属色调 (2026 Trend)
+            market_vibes = {
+                "东南亚": "warm champagne and soft cream (Warm & Glowing)",
+                "美国": "cool minimalist grey and stark white (Clean & Bold)",
+                "日韩": "airy macaron pink and soft lavender (Pure & Sweet)",
+                "拉美": "vibrant terracotta and sunset orange (Energetic)",
+                "中东": "deep emerald and royal gold accents (Luxury)",
+                "非洲": "rich earthy brown and clay textures (Organic)"
+            }
+            selected_vibe = market_vibes.get(market, "soft neutral tones")
+
+            # 3. 动态元素组合 (保持你的随机多样性)
+            selected_support = random.choice([
+                "a textured travertine stone pedestal", "a minimalist matte ceramic slab", 
+                "a smooth rounded river stone", "a stack of clean linen-textured blocks"
+            ])
+            selected_organic = random.choice([
+                "a delicate silk ribbon", "scattered dried jasmine petals", 
+                "a single Monstera leaf edge", "softly draped satin fabric"
+            ])
+            selected_shadow = random.choice(["palm frond", "venetian blinds", "soft window arch", "delicate fern"])
+
+            # 4. 核心渲染逻辑 (重点：材质增强 & 焦点控制)
+            if p_type == "模特图":
+                # 模特图逻辑：增加肤色适配与质感
+                skin_tone = "warm glowing skin tone" if market == "东南亚" else "natural skin texture"
+                prompt = (
+                    f"High-end editorial fashion photography of a beautiful {gender} model wearing the specific {en_category} from reference image. "
+                    f"Close-up on the {target_part}, showcasing {skin_tone}. Background is {selected_vibe}. "
+                    f"Natural daylight, 8k resolution, cinematic bokeh, sharp focus on jewelry texture, TikTok viral aesthetic."
+                )
+            else:
+                # 商品图逻辑：重点强调金属光泽与宝石折射
+                prompt = (
+                    f"A premium macro product photography of the {en_category} shown in the reference image. "
+                    f"The item is elegantly displayed on {selected_support}, with {selected_organic} in the background. "
+                    f"Background color theme: {selected_vibe}. Lighting: High-key natural sunlight with 'Anisotropic reflections' on metal surfaces "
+                    f"and 'Subsurface scattering' on any gems or pearls. NO BLUR on the jewelry itself, razor-sharp focus from end to end. "
+                    f"Artistic shadows of {selected_shadow} cast softly. Shot on Hasselblad X1D II, 120mm macro, 8k, photorealistic rendering."
+                )
             payload = {
                 "model": mid,
                 "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_in}"}}]}],
