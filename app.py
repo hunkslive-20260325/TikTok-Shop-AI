@@ -5,9 +5,10 @@ from PIL import Image
 from io import BytesIO
 import re
 import random
+import zipfile  # 用于批量下载
 
 # ==========================================
-# 模型库
+# 模型库与配置
 # ==========================================
 ALL_DRAWING_MODELS = {
     "openrouter/auto": "openrouter/auto",
@@ -20,14 +21,18 @@ ALL_DRAWING_MODELS = {
 ALL_TEXT_MODELS = [
     "openrouter/auto",
     "deepseek/deepseek-v3.2",
-    "deepseek/deepseek-chat",
     "openai/gpt-5.4",
-    "google/gemini-3.1-pro-preview",
-    "google/gemini-3.1-pro-preview-customtools"
+    "google/gemini-3.1-pro-preview"
+]
+
+# 1. 饰品类型修改 (20260422 更新)
+JEWELRY_CATEGORIES = [
+    "项链", "耳环", "脚链", "戒指", "手环与手链", 
+    "首饰吊件及装饰", "身体饰品", "钥匙扣", "首饰套装"
 ]
 
 # ------------------------------------------
-# 安全请求函数
+# 安全请求与辅助函数
 # ------------------------------------------
 def safe_post(url, headers, json_data, timeout=60):
     try:
@@ -37,47 +42,16 @@ def safe_post(url, headers, json_data, timeout=60):
     except Exception as e:
         return {"error": f"请求失败: {e}"}
 
-# ------------------------------------------
-# 显示图片 + 下载按钮 (回归原始比例)
-# ------------------------------------------
-def display_image(data, filename="image.png", preview_width=400):
-    try:
-        img_full = None 
-        img_data = None
-        if isinstance(data, dict):
-            if "images" in data and data["images"]:
-                img_data = data["images"][0]
-            elif "image_url" in data:
-                img_data = data["image_url"].get("url")
-            elif "content" in data:
-                img_data = data["content"]
-        elif isinstance(data, str):
-            img_data = data
-
-        if not img_data: return
-
-        if isinstance(img_data, str) and img_data.startswith("data:image"):
-            img_base64 = img_data.split(",")[1]
-            raw_bytes = base64.b64decode(img_base64)
-            img_full = Image.open(BytesIO(raw_bytes))
-        elif isinstance(img_data, str) and img_data.startswith("http"):
-            img_full = img_data  # URL 情况
-        else:
-            raw_bytes = base64.b64decode(img_data)
-            img_full = Image.open(BytesIO(raw_bytes))
-
-        # --- 关键修改：限制预览宽度 ---
-        st.image(img_full, width=preview_width)
-
-        if isinstance(img_full, Image.Image):
-            buf = BytesIO()
-            img_full.save(buf, format="PNG")
-            st.download_button(label="⬇️ 下载全尺寸原图", data=buf.getvalue(), file_name=filename, mime="image/png", key=f"dl_{hash(str(data))}")
-        elif isinstance(img_full, str) and img_full.startswith("http"):
-            st.markdown(f"[🔗 打开原图链接]({img_full})")
-            
-    except Exception as e:
-        st.error(f"图片显示失败: {e}")
+def get_image_bytes(img_data):
+    """统一处理不同格式的图片数据转为 Bytes"""
+    if isinstance(img_data, str) and img_data.startswith("http"):
+        res = requests.get(img_data)
+        return res.content
+    elif isinstance(img_data, str) and "base64," in img_data:
+        return base64.b64decode(img_data.split(",")[1])
+    elif isinstance(img_data, str):
+        return base64.b64decode(img_data)
+    return None
 
 # ==========================================
 # AI 引擎
@@ -88,57 +62,26 @@ class JewelryAIEngineV48:
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "Jewelry_V48"
+            "X-Title": "Jewelry_Batch_V48"
         }
   
-    def run_smart_gen(self, mid_key, p_type, title, gender, category, market, file):
+    def run_smart_gen(self, mid_key, p_type, gender, category, market, file_bytes):
         try:
             mid = ALL_DRAWING_MODELS.get(mid_key)
-            b64_in = base64.b64encode(file.getvalue()).decode('utf-8')
+            b64_in = base64.b64encode(file_bytes).decode('utf-8')
 
-            # 1. 材质与部位映射（增强 AI 识别力）
-            mapping = {"项链": "Necklace", "戒指": "Ring", "手链": "Bracelet", "手镯": "Bangle", "耳环": "Earrings", "耳钉": "Ear Studs", "头饰": "Hair Accessory", "脚链": "Anklet"}
+            # 材质与部位增强映射
+            mapping = {"项链": "Necklace", "耳环": "Earrings", "脚链": "Anklet", "戒指": "Ring", "手环与手链": "Bracelet/Bangle", "首饰套装": "Jewelry Set"}
             en_category = mapping.get(category, "Jewelry")
             
-            focus_parts = {"项链": "neck", "戒指": "fingers", "手链": "wrist", "手镯": "wrist", "耳环": "ear", "耳钉": "ear", "头饰": "hair", "脚链": "ankle"}
-            target_part = focus_parts.get(category, "body")
-
-            # 2. 东南亚市场专属色调 (2026 Trend)
-            market_vibes = {
-                "东南亚": "warm champagne and soft cream (Warm & Glowing)",
-                "美国": "cool minimalist grey and stark white (Clean & Bold)",
-                "日韩": "airy macaron pink and soft lavender (Pure & Sweet)",
-                "拉美": "vibrant terracotta and sunset orange (Energetic)",
-                "中东": "deep emerald and royal gold accents (Luxury)",
-                "非洲": "rich earthy brown and clay textures (Organic)"
-            }
+            market_vibes = {"东南亚": "warm champagne and soft cream", "美国": "cool minimalist grey", "中东": "royal gold"}
             selected_vibe = market_vibes.get(market, "soft neutral tones")
 
-            # 3. 动态元素组合 (保持你的随机多样性)
-            selected_support = random.choice([
-                "a textured travertine stone pedestal", "a minimalist matte ceramic slab", 
-                "a smooth rounded river stone", "a stack of clean linen-textured blocks"
-            ])
-            selected_organic = random.choice([
-                "a delicate silk ribbon", "scattered dried jasmine petals", 
-                "a single Monstera leaf edge", "softly draped satin fabric"
-            ])
-            selected_shadow = random.choice(["palm frond", "venetian blinds", "soft window arch", "delicate fern"])
-
-            # 4. 核心渲染逻辑 (重点：材质增强 & 焦点控制)
-            if p_type == "模特图" and gender == "男性":
-                prompt = f"Professional male model wearing {category}, focusing on {target_part}. Natural skin, black waffle-knit sweater, gray studio background, 8k."
-            elif p_type == "模特图" and gender == "女性":
-                prompt = f"Elegant East Asian female model wearing {category}, focusing on {target_part}. Creamy skin, white linen shirt, beige background, 8k."
+            if p_type == "模特图":
+                prompt = f"Professional model wearing {en_category}, {gender}, high fashion photography, {selected_vibe} studio background, 8k."
             else:
-                # 商品图逻辑：重点强调金属光泽与宝石折射
-                prompt = (
-                    f"A premium macro product photography of the {en_category} shown in the reference image. "
-                    f"The item is elegantly displayed on {selected_support}, with {selected_organic} in the background. "
-                    f"Background color theme: {selected_vibe}. Lighting: High-key natural sunlight with 'Anisotropic reflections' on metal surfaces "
-                    f"and 'Subsurface scattering' on any gems or pearls. NO BLUR on the jewelry itself, razor-sharp focus from end to end. "
-                    f"Artistic shadows of {selected_shadow} cast softly. Shot on Hasselblad X1D II, 120mm macro, 8k, photorealistic rendering."
-                )
+                prompt = f"Premium macro product photography of {en_category}, displayed on minimalist stone, {selected_vibe} theme, 8k, razor sharp."
+
             payload = {
                 "model": mid,
                 "messages": [{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{b64_in}"}}]}],
@@ -149,252 +92,102 @@ class JewelryAIEngineV48:
         except:
             return None
 
-    def run_seo(self, model_id, title, market, gender, category):
-        # prompt = f"针对{title}生成三条{market}市场{gender}用{category}的SEO标题，含中文翻译和理由。"
-        # 20260324 16:37 优化标题prompt生成条件
-        prompt = (
-            f"请结合原始标题：{title}，目标市场：{market}，目标人群：{gender}，饰品类型：{category}，生成三条优化标题，按推荐级别排序。\n"
-            f"要求：推荐理由不超过50字。\n\n"
-            f"输出格式：\n"
-            f"推荐标题一：****\n"
-            f"中文翻译：****\n"
-            f"推荐理由：****\n"
-            f"推荐标题二：****\n"
-            f"中文翻译：****\n"
-            f"推荐理由：****\n"
-            f"推荐标题三：****\n"
-            f"中文翻译：****\n"
-            f"推荐理由：****"
-        )
-        res = safe_post("https://openrouter.ai/api/v1/chat/completions", self.headers, {"model": model_id, "messages":[{"role":"user","content":prompt}]})
-        return res.get('choices',[{}])[0].get('message',{}).get('content', "")
-
 # ==========================================
 # Streamlit UI
 # ==========================================
-st.set_page_config(page_title="AM JEWELRY V48", layout="wide")
-# ==========================================
-# 20260324 16:37 优化标题显示
-# ==========================================
-st.markdown("""
-    <style>
-    # ==========================================
-    # 20260324 16:37 优化日志显示
-    # ==========================================
-    /* ======== 日志展示区 UI 样式 ======== */
-    .log-container {
-        background-color: #1e1e1e; /* 深灰色背景 */
-        color: #00ff00;            /* 荧光绿字体，模拟控制台 */
-        padding: 15px;
-        border-radius: 8px;
-        border-left: 5px solid #0d47a1;
-        margin-bottom: 20px;
-        font-family: 'Courier New', Courier, monospace;
-        min-height: 60px;
-        display: flex;
-        align-items: center;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .log-icon {
-        margin-right: 12px;
-        font-size: 1.2rem;
-    }
-    /* ======== 日志展示区 UI 样式 ======== */
-    # ==========================================
-    
-    div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
-    .stFileUploader { padding-top: 0rem; }
-    div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
-    
-    /* ======== SEO 标题展示 UI 样式 ======== */
-    .seo-card {
-        border-radius: 8px;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        margin-bottom: 20px;
-        overflow: hidden;
-        border: 1px solid #e0e0e0;
-        font-family: sans-serif;
-    }
-    .seo-row {
-        padding: 12px 16px;
-        line-height: 1.6;
-    }
-    .seo-title {
-        background-color: #e3f2fd; /* 浅蓝色背景 */
-        color: #0d47a1;            /* 深蓝色字体 */
-        border-bottom: 1px solid #bbdefb;
-    }
-    .seo-trans {
-        background-color: #f1f8e9; /* 浅绿色背景 */
-        color: #33691e;            /* 深绿色字体 */
-        border-bottom: 1px solid #dcedc8;
-    }
-    .seo-reason {
-        background-color: #fff3e0; /* 浅橙色背景 */
-        color: #e65100;            /* 深橙色字体 */
-    }
-    .seo-label {
-        font-weight: 600;
-        margin-right: 8px;
-    }
-    </style>
-""", unsafe_allow_html=True)
-# ==========================================
-st.markdown("""
-    <style>
-    div[data-testid="stWidgetLabel"] + div { flex-direction: row !important; }
-    .stFileUploader { padding-top: 0rem; }
-    div[data-testid="stFileUploader"] section { padding: 0.5rem; min-height: 80px; }
-    </style>
-""", unsafe_allow_html=True)
+st.set_page_config(page_title="AM JEWELRY V48 批量版", layout="wide")
 
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngineV48(api_key)
 
-if "p_imgs" not in st.session_state: st.session_state.p_imgs = []
+# Session State 初始化
+if "p_imgs" not in st.session_state: st.session_state.p_imgs = [] # 存储格式 [(filename, data), ...]
 if "m_imgs" not in st.session_state: st.session_state.m_imgs = []
-if "seo_result" not in st.session_state: st.session_state.seo_result = None
 
 with st.sidebar:
-    st.subheader("💎 AM JEWELRY V48-20260324")
-    u_title = st.text_input("原始标题", "心形项链")
+    st.subheader("💎 批量生成控制台")
     u_market = st.selectbox("目标市场", ["东南亚","美国","日韩","拉美","中东","非洲"])
-    u_category = st.selectbox("饰品类型", ["头饰","耳环","耳钉","项链","手链","手镯","戒指","脚链"], index=3)
+    u_category = st.selectbox("饰品类型", JEWELRY_CATEGORIES)
     u_gender = st.radio("目标人群", ["女性","男性"])
-    u_file = st.file_uploader("上传图片", type=["jpg","png","jpeg"])
     
+    # 2. 支持多图上传 (最多10张)
+    u_files = st.file_uploader("上传图片 (支持多选，上限10张)", type=["jpg","png","jpeg"], accept_multiple_files=True)
+    if u_files and len(u_files) > 10:
+        st.warning("已超过10张，系统将仅处理前10张。")
+        u_files = u_files[:10]
+
     st.divider()
-    
-    c1, c2, c3 = st.columns(3)
-    btn_seo = c1.button("标题")
-    btn_prod = c2.button("商品")
-    btn_mod = c3.button("模特")
-    
-    u_img_count = st.selectbox("生成图片数量", [1, 2, 4], index=0)
-    model_text = st.selectbox("优化标题模型", ALL_TEXT_MODELS)
+    u_img_count = st.selectbox("每张图生成的变体数量", [1, 2, 4], index=0)
     model_img = st.selectbox("优化图片模型", list(ALL_DRAWING_MODELS.keys()), index=4)
+    
+    c1, c2 = st.columns(2)
+    btn_prod = c1.button("批量生成商品图", use_container_width=True)
+    btn_mod = c2.button("批量生成模特图", use_container_width=True)
 
-# --- 主界面逻辑 ---
+# --- 核心逻辑：批量生成 ---
 log_area = st.empty()
 
-# --- 注释: 生成标题重复 ---
-# if btn_seo:
-#     st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
+def process_batch(mode):
+    if not u_files:
+        st.error("请先上传图片！")
+        return
     
-# ==========================================
-# 20260324 16:37 优化日志显示
-# ==========================================  
-# --- 主界面逻辑 ---
-# 定义一个辅助函数来渲染日志
-def update_log(msg, icon="⏳"):
-    log_area.markdown(f"""
-        <div class="log-container">
-            <span class="log-icon">{icon}</span>
-            <span>{msg}</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-log_area = st.empty()
-# 初始状态提示（可选）
-update_log("等待操作指令...", icon="🤖")
-
-if btn_seo:
-    update_log("正在分析市场趋势并生成 SEO 标题...", icon="🔍")
-    st.session_state.seo_result = engine.run_seo(model_text, u_title, u_market, u_gender, u_category)
-    update_log("标题生成任务已完成！", icon="✅")
-
-if btn_prod and u_file:
-    st.session_state.p_imgs = []
-    for i in range(u_img_count):
-        update_log(f"正在生成商品图：进度 {i+1}/{u_img_count}...", icon="🖼️")
-        res = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_market, u_file)
-        if res: st.session_state.p_imgs.append(res)
-    update_log("所有商品图已生成完毕！", icon="✅")
-
-if btn_mod and u_file:
-    st.session_state.m_imgs = []
-    for i in range(u_img_count):
-        update_log(f"正在生成模特图：进度 {i+1}/{u_img_count}...", icon="👤")
-        res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file)
-        if res: st.session_state.m_imgs.append(res)
-    update_log("所有模特图已生成完毕！", icon="✅")
-# ==========================================
-
-# ==========================================
-# 20260324 16:37 注释优化日志显示
-# ==========================================    
-# if btn_prod and u_file:
-#     st.session_state.p_imgs = []
-#     for i in range(u_img_count):
-#         log_area.info(f"正在生成第 {i+1}/{u_img_count} 张商品图...")
-#         res = engine.run_smart_gen(model_img, "商品图", u_title, u_gender, u_category, u_market, u_file)
-#         if res: st.session_state.p_imgs.append(res)
-#     log_area.success("商品图生成完毕")
-
-# if btn_mod and u_file:
-#     st.session_state.m_imgs = []
-#     for i in range(u_img_count):
-#         log_area.info(f"正在生成第 {i+1}/{u_img_count} 张模特图...")
-#         res = engine.run_smart_gen(model_img, "模特图", u_title, u_gender, u_category, u_market, u_file)
-#         if res: st.session_state.m_imgs.append(res)
-#     log_area.success("模特图生成完毕")
-# ==========================================
+    results = []
+    total_tasks = len(u_files) * u_img_count
+    current_task = 0
     
-# ==========================================
-# 展示区
-# ==========================================
-# if st.session_state.seo_result:
-#     with st.expander("📝 查看优化标题", expanded=True):
-#         st.write(st.session_state.seo_result)
-# ==========================================
-# 20260324 16:37 展示区优化标题显示
-# ==========================================
-if st.session_state.seo_result:
-    with st.expander("📝 查看优化标题", expanded=True):
-        raw_text = st.session_state.seo_result
+    for f_idx, file_obj in enumerate(u_files):
+        file_bytes = file_obj.getvalue()
+        base_name = file_obj.name.split('.')[0]
         
-        # 使用正则提取三组内容
-        pattern = r"推荐标题([一二三])：(.*?)\n中文翻译：(.*?)\n推荐理由：(.*?)(?=\n推荐标题|$)"
-        matches = re.findall(pattern, raw_text, re.DOTALL)
-        
-        if matches:
-            for match in matches:
-                num, title, trans, reason = match
-                # 拼接 HTML 卡片结构
-                html_content = f"""
-                <div class="seo-card">
-                    <div class="seo-row seo-title">
-                        <div class="seo-label">推荐标题{num}：</div> 
-                        <div>{title.strip()}</div>
-                    </div>
-                    <div class="seo-row seo-trans">
-                        <div class="seo-label">中文翻译：</div> 
-                        <div>{trans.strip()}</div>
-                    </div>
-                    <div class="seo-row seo-reason">
-                        <div class="seo-label">推荐理由：</div> 
-                        <div>{reason.strip()}</div>
-                    </div>
-                </div>
-                """
-                st.markdown(html_content, unsafe_allow_html=True)
-        else:
-            # 降级处理：如果大模型偶尔没有严格按照格式输出，则回退到普通文本显示
-            st.markdown(raw_text)
-# ==========================================           
+        for v_idx in range(u_img_count):
+            current_task += 1
+            log_area.info(f"正在处理: {file_obj.name} (进度: {current_task}/{total_tasks})")
+            
+            res = engine.run_smart_gen(model_img, mode, u_gender, u_category, u_market, file_bytes)
+            if res:
+                # 记录文件名和图片数据
+                results.append((f"{mode}_{base_name}_v{v_idx+1}.png", res))
+    
+    if mode == "商品图": st.session_state.p_imgs = results
+    else: st.session_state.m_imgs = results
+    log_area.success(f"✅ {mode}批量处理完成！共生成 {len(results)} 张。")
 
+if btn_prod: process_batch("商品图")
+if btn_mod: process_batch("模特图")
+
+# --- 批量下载函数 ---
+def create_zip(image_list):
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for filename, data in image_list:
+            img_bytes = get_image_bytes(data)
+            if img_bytes:
+                z.writestr(filename, img_bytes)
+    return buf.getvalue()
+
+# --- 展示与批量下载区 ---
 if st.session_state.p_imgs or st.session_state.m_imgs:
-    t1, t2 = st.tabs(["🖼️ 商品展示", "👤 模特展示"])
+    st.divider()
+    col_dl1, col_dl2 = st.columns(2)
+    
+    if st.session_state.p_imgs:
+        zip_data = create_zip(st.session_state.p_imgs)
+        col_dl1.download_button("📥 一键下载所有商品图 (ZIP)", data=zip_data, file_name="batch_products.zip", mime="application/zip")
+        
+    if st.session_state.m_imgs:
+        zip_data = create_zip(st.session_state.m_imgs)
+        col_dl2.download_button("📥 一键下载所有模特图 (ZIP)", data=zip_data, file_name="batch_models.zip", mime="application/zip")
+
+    # 预览
+    t1, t2 = st.tabs(["🖼️ 商品预览", "👤 模特预览"])
     with t1:
-        # 每行显示 2 个，这样 400px x 2 刚好适合大部分屏幕
-        cols = st.columns(2) 
-        for idx, img in enumerate(st.session_state.p_imgs):
-            with cols[idx % 2]:
-                st.markdown(f"**版本 {idx+1}**")
-                display_image(img, filename=f"prod_{idx}.png", preview_width=400)
+        cols = st.columns(3)
+        for idx, (name, data) in enumerate(st.session_state.p_imgs):
+            with cols[idx % 3]:
+                st.image(data, caption=name, use_container_width=True)
     with t2:
-        cols = st.columns(2)
-        for idx, img in enumerate(st.session_state.m_imgs):
-            with cols[idx % 2]:
-                st.markdown(f"**版本 {idx+1}**")
-                display_image(img, filename=f"model_{idx}.png", preview_width=400)
+        cols = st.columns(3)
+        for idx, (name, data) in enumerate(st.session_state.m_imgs):
+            with cols[idx % 3]:
+                st.image(data, caption=name, use_container_width=True)
