@@ -5,6 +5,7 @@ from PIL import Image
 from io import BytesIO
 import random
 import zipfile
+import json
 
 # ==========================================
 # 核心配置
@@ -15,30 +16,28 @@ DEFAULT_MODEL = "google/gemini-2.5-flash-image"
 # 工具函数
 # ==========================================
 def safe_post(url, headers, json_data, timeout=150):
-    """带异常处理的 POST 请求"""
+    """请求 API 并返回 JSON 或 错误信息"""
     try:
         res = requests.post(url, headers=headers, json=json_data, timeout=timeout)
-        res.raise_for_status()
+        if res.status_code != 200:
+            return {"error": f"API 状态码异常: {res.status_code}", "detail": res.text}
         return res.json()
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": "网络请求异常", "detail": str(e)}
 
 def get_image_bytes(img_data):
-    """将 AI 返回的数据统一转为有效字节流，并进行健壮性校验"""
+    """转换图片字节流"""
     if not img_data or not isinstance(img_data, str): 
         return None
     try:
-        # 情况1：URL 链接
         if img_data.startswith("http"):
             res = requests.get(img_data, timeout=30)
             return res.content if res.status_code == 200 else None
-        # 情况2：带前缀的 Base64
         elif "base64," in img_data:
             return base64.b64decode(img_data.split(",")[1])
-        # 情况3：纯 Base64 字符串
         else:
             return base64.b64decode(img_data)
-    except Exception:
+    except:
         return None
 
 # ==========================================
@@ -50,26 +49,14 @@ class JewelryAIEngineV48:
         self.headers = {
             "Authorization": f"Bearer {api_key}",
             "HTTP-Referer": "https://streamlit.io",
-            "X-Title": "AM_Jewelry_V48_Fixed"
+            "X-Title": "AM_Jewelry_V48_Debug"
         }
   
     def run_smart_gen(self, mode, gender, category, file_bytes):
-        """调用 AI 生成单张图片"""
+        """调用 AI 生成单张图片，返回 (结果数据, 错误日志)"""
         try:
             b64_in = base64.b64encode(file_bytes).decode('utf-8')
-            
-            # 环境随机化：提升批量生成的多样性
-            props = random.choice(["minimalist marble pedestal", "textured travertine slab", "soft organic stone"])
-            decor = random.choice(["gentle palm shadows", "folded silk fabric", "scattered jasmine petals"])
-
-            if mode == "模特图":
-                prompt = (f"A high-end professional fashion shot of a {gender} model wearing this {category}. "
-                          f"The jewelry must be in sharp focus with exquisite metallic luster. "
-                          f"Natural skin texture, clean studio lighting, 8k photorealistic.")
-            else:
-                prompt = (f"Premium macro product photography of the {category}. "
-                          f"The item is elegantly placed on a {props} with {decor} in the background. "
-                          f"High-key lighting, anisotropic reflections on metal, razor-sharp focus, 8k.")
+            prompt = f"Premium photography of {category} for {gender}. 8k, sharp focus."
 
             payload = {
                 "model": DEFAULT_MODEL,
@@ -83,157 +70,122 @@ class JewelryAIEngineV48:
                 "modalities": ["image"]
             }
             
-            # 确保 API 路径正确
             api_url = "https://openrouter.ai/api/v1/chat/completions"
             res_json = safe_post(api_url, self.headers, payload)
             
-            # 提取数据逻辑
-            if res_json and 'choices' in res_json:
+            # 如果开启调试模式，在页面输出原始数据
+            if st.session_state.get('debug_mode'):
+                with st.expander("🔍 原始 API 回包内容", expanded=False):
+                    st.json(res_json)
+
+            if "error" in res_json:
+                return None, f"请求失败: {res_json.get('error')} | 详情: {res_json.get('detail')}"
+
+            if 'choices' in res_json:
                 msg = res_json['choices'][0].get('message', {})
-                # 兼容不同模型的图片返回位置
                 img_data = msg.get('images', [None])[0]
-                if not img_data and isinstance(msg.get('content'), str) and "data:image" in msg.get('content'):
+                if not img_data and "data:image" in str(msg.get('content', '')):
                     img_data = msg['content']
-                return img_data
-            return None
-        except Exception:
-            return None
+                
+                if img_data:
+                    return img_data, None
+                else:
+                    return None, f"API 未返回图像数据。回包内容: {json.dumps(msg)}"
+            
+            return None, f"未知回包结构: {json.dumps(res_json)}"
+        except Exception as e:
+            return None, f"本地代码执行异常: {str(e)}"
 
 # ==========================================
-# Streamlit 界面逻辑
+# Streamlit 界面
 # ==========================================
-st.set_page_config(page_title="AM JEWELRY Pro", layout="wide")
+st.set_page_config(page_title="AM JEWELRY Pro Debug", layout="wide")
 
-# 自定义 CSS 提升 UI 质感
+# CSS
 st.markdown("""
     <style>
-    .log-container {
-        background-color: #0e1117; color: #00ff00; padding: 15px;
-        border-radius: 8px; border: 1px solid #30363d;
-        font-family: 'Courier New', monospace; font-size: 0.85rem;
-        margin-bottom: 20px;
-    }
-    .stButton>button { width: 100%; border-radius: 4px; }
+    .log-container { background-color: #0e1117; color: #00ff00; padding: 15px; border-radius: 8px; font-family: monospace; }
+    .err-container { background-color: #2e0000; color: #ff9999; padding: 15px; border-radius: 8px; font-family: monospace; margin-top: 10px; border: 1px solid red; }
     </style>
 """, unsafe_allow_html=True)
 
-# 密钥认证
 api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 engine = JewelryAIEngineV48(api_key)
 
-# 初始化状态保持
 if "p_imgs" not in st.session_state: st.session_state.p_imgs = []
 if "m_imgs" not in st.session_state: st.session_state.m_imgs = []
 
-# --- 侧边栏 ---
 with st.sidebar:
     st.title("💎 AM JEWELRY")
-    st.caption("Batch Pro v4.8 | 2026 Edition")
+    st.checkbox("🛠 开启调试模式 (显示原始日志)", key="debug_mode")
     
-    u_category = st.selectbox("饰品类型", [
-        "项链", "耳环", "脚链", "戒指", "手环与手链", 
-        "首饰吊件及装饰", "身体饰品", "钥匙扣", "首饰套装"
-    ])
+    u_category = st.selectbox("饰品类型", ["项链", "耳环", "脚链", "戒指", "手环与手链", "身体饰品", "首饰套装"])
     u_gender = st.radio("目标人群", ["女性", "男性"])
-    
-    st.divider()
-    u_files = st.file_uploader("上传原图 (上限10张)", type=["jpg","png","jpeg"], accept_multiple_files=True)
-    if u_files and len(u_files) > 10:
-        u_files = u_files[:10]
-
-    u_img_count = st.select_slider("每张图生成变体数", options=[1, 2, 4], value=1)
+    u_files = st.file_uploader("上传原图 (Max 10)", type=["jpg","png","jpeg"], accept_multiple_files=True)
+    u_img_count = st.select_slider("每张图变体数", options=[1, 2, 4], value=1)
     
     st.divider()
     c1, c2 = st.columns(2)
     btn_prod = c1.button("批量商品图", type="primary")
     btn_mod = c2.button("批量模特图")
+
+# --- 逻辑处理 ---
+log_placeholder = st.container()
+
+def run_batch(mode):
+    if not u_files: return st.error("请先上传图片")
     
-    if st.button("🗑️ 清空结果"):
-        st.session_state.p_imgs = []
-        st.session_state.m_imgs = []
-        st.rerun()
-
-# --- 核心业务逻辑 ---
-log_area = st.empty()
-
-def update_log(msg, icon="⏳"):
-    log_area.markdown(f'<div class="log-container">{icon} {msg}</div>', unsafe_allow_html=True)
-
-def run_batch_process(mode):
-    if not u_files:
-        st.error("请先上传图片！")
-        return
-    
-    temp_list = []
+    success_list = []
     total = len(u_files) * u_img_count
-    current = 0
+    idx = 0
     
     for f in u_files:
         f_bytes = f.getvalue()
-        base_name = f.name.split('.')[0]
-        
         for i in range(u_img_count):
-            current += 1
-            update_log(f"正在处理 ({current}/{total}): {f.name}")
+            idx += 1
+            with log_placeholder:
+                st.markdown(f'<div class="log-container">⏳ 正在处理 ({idx}/{total}): {f.name}</div>', unsafe_allow_html=True)
             
-            img_data = engine.run_smart_gen(mode, u_gender, u_category, f_bytes)
+            data, err = engine.run_smart_gen(mode, u_gender, u_category, f_bytes)
             
-            # 只有获取到非空数据才存入结果集
-            if img_data:
-                temp_list.append((f"{mode}_{base_name}_v{i+1}.png", img_data))
-            else:
-                st.warning(f"图片 {f.name} 生成异常，已跳过。")
+            if err:
+                with log_placeholder:
+                    st.markdown(f'<div class="err-container">❌ 错误报告 [{f.name}]:<br>{err}</div>', unsafe_allow_html=True)
+            if data:
+                success_list.append((f"{mode}_{f.name.split('.')[0]}_{i}.png", data))
                 
-    if mode == "商品图": st.session_state.p_imgs = temp_list
-    else: st.session_state.m_imgs = temp_list
-    update_log(f"任务完成！成功生成 {len(temp_list)} 张图片", icon="✅")
+    if mode == "商品图": st.session_state.p_imgs = success_list
+    else: st.session_state.m_imgs = success_list
 
-if btn_prod: run_batch_process("商品图")
-if btn_mod: run_batch_process("模特图")
+if btn_prod: run_batch("商品图")
+if btn_mod: run_batch("模特图")
 
-# --- 渲染与批量下载 ---
-def safe_display_image(data, caption, column):
-    """安全渲染图片，增加 PIL 校验防止引发 Streamlit 内部错误"""
-    if not data: return
-    img_bytes = get_image_bytes(data)
-    if img_bytes:
-        try:
-            # 预检：如果字节流无法被 PIL 打开，说明不是有效图片
-            img_obj = Image.open(BytesIO(img_bytes))
-            column.image(img_obj, caption=caption, use_container_width=True)
-        except Exception:
-            column.error(f"解析失败: {caption}")
-    else:
-        column.error("无效的数据流")
-
+# --- 结果与下载 ---
 if st.session_state.p_imgs or st.session_state.m_imgs:
     st.divider()
     
     def prepare_zip(image_list):
-        """批量下载 ZIP 打包逻辑"""
         buf = BytesIO()
         with zipfile.ZipFile(buf, "w") as z:
             for name, data in image_list:
-                b_data = get_image_bytes(data)
-                if b_data: z.writestr(name, b_data)
+                b = get_image_bytes(data)
+                if b: z.writestr(name, b)
         return buf.getvalue()
 
     col_dl1, col_dl2 = st.columns(2)
     if st.session_state.p_imgs:
-        p_zip = prepare_zip(st.session_state.p_imgs)
-        col_dl1.download_button("📥 下载全部商品图 (ZIP)", p_zip, "products_batch.zip")
+        col_dl1.download_button("📥 下载商品图 (ZIP)", prepare_zip(st.session_state.p_imgs), "p.zip")
     if st.session_state.m_imgs:
-        m_zip = prepare_zip(st.session_state.m_imgs)
-        col_dl2.download_button("📥 下载全部模特图 (ZIP)", m_zip, "models_batch.zip")
+        col_dl2.download_button("📥 下载模特图 (ZIP)", prepare_zip(st.session_state.m_imgs), "m.zip")
 
-    t1, t2 = st.tabs(["🖼️ 商品展示", "👤 模特展示"])
+    t1, t2 = st.tabs(["🖼 商品", "👤 模特"])
     with t1:
-        if st.session_state.p_imgs:
-            cols = st.columns(3)
-            for idx, (name, data) in enumerate(st.session_state.p_imgs):
-                safe_display_image(data, name, cols[idx % 3])
+        cols = st.columns(3)
+        for i, (name, data) in enumerate(st.session_state.p_imgs):
+            b = get_image_bytes(data)
+            if b: cols[i%3].image(Image.open(BytesIO(b)), caption=name)
     with t2:
-        if st.session_state.m_imgs:
-            cols = st.columns(3)
-            for idx, (name, data) in enumerate(st.session_state.m_imgs):
-                safe_display_image(data, name, cols[idx % 3])
+        cols = st.columns(3)
+        for i, (name, data) in enumerate(st.session_state.m_imgs):
+            b = get_image_bytes(data)
+            if b: cols[i%3].image(Image.open(BytesIO(b)), caption=name)
